@@ -1,0 +1,46 @@
+{
+    "patient_id": "S_154",
+    "normalization_mode": "robust_mad",
+    "normalization_p_low": 1,
+    "normalization_p_high": 99,
+    "normalization_mask_source": "processed_mask",
+    "original_shape": [
+        815,
+        377
+    ],
+    "resized_shape": [
+        1024,
+        474
+    ],
+    "final_image_shape": [
+        1024,
+        474
+    ],
+    "standardize_long_side": true,
+    "target_long_side": 1024,
+    "scale_x": 1.2564417177914111,
+    "scale_y": 1.2564417177914111,
+    "processed_mask_path": "/content/drive/MyDrive/TDA_PIPELINE/GRAY_TO_EXTRACTOR_CURVE_robust_mad/curvas_mascara_multicolor/curvas_mascara_multicolor/curvas_paciente/S_154/processed_mask.png",
+    "image_before_norm_stats": {
+        "min": 0.0,
+        "max": 248.0,
+        "mean": 88.34234619140625,
+        "std": 60.882137298583984,
+        "median": 90.0,
+        "p1": 1.0,
+        "p5": 8.0,
+        "p95": 181.0,
+        "p99": 205.0
+    },
+    "image_after_norm_stats": {
+        "min": 0.0,
+        "max": 255.0,
+        "mean": 108.58595275878906,
+        "std": 75.95018005371094,
+        "median": 111.0,
+        "p1": 0.0,
+        "p5": 8.0,
+        "p95": 225.0,
+        "p99": 255.0
+    }
+}

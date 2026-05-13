@@ -1,0 +1,43 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fastapi_spring_style_api
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mongo
+      - redis
+      - localstack
+
+  mongo:
+    image: mongo:7
+    container_name: fastapi_spring_style_mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+      - ./resources/mongo/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+
+  redis:
+    image: redis:7-alpine
+    container_name: fastapi_spring_style_redis
+    ports:
+      - "6379:6379"
+
+  localstack:
+    image: localstack/localstack:3
+    container_name: fastapi_spring_style_localstack
+    environment:
+      - SERVICES=s3
+      - AWS_DEFAULT_REGION=us-east-1
+    ports:
+      - "4566:4566"
+    volumes:
+      - ./resources/localstack/init-s3.sh:/etc/localstack/init/ready.d/init-s3.sh:ro
+
+volumes:
+  mongo_data:
