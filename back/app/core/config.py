@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     aws_access_key_id: str = "test"
     aws_secret_access_key: str = "test"
     aws_s3_bucket: str = "project-files"
-    aws_s3_endpoint_url: str | None = None
+    aws_s3_endpoint_url: str | None = "http://localhost:4566"  # LocalStack default endpoint
 
     mongo_uri: str = "mongodb://localhost:27017"
     mongo_db: str = "app_db"

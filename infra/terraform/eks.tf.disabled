@@ -1,0 +1,2 @@
+# EKS module disabled - using ECS instead for lab environment
+# To use EKS in future, uncomment this file and modify iam.tf to use existing LabRole

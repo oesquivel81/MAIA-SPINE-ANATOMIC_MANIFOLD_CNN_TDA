@@ -13,6 +13,7 @@ services:
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
       AWS_S3_BUCKET: project-files
+      AWS_S3_ENDPOINT_URL: http://localstack:4566
       MONGO_URI: mongodb://mongo:27017
       MONGO_DB: app_db
       MONGO_COLLECTION: file_metadata
@@ -29,6 +30,8 @@ services:
       mongo:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      localstack:
         condition: service_healthy
 
   mongo:
@@ -57,6 +60,30 @@ services:
       timeout: 3s
       retries: 8
       start_period: 10s
+
+  localstack:
+    image: localstack/localstack:3.0
+    container_name: maia_localstack
+    ports:
+      - "4566:4566"
+      - "4571:4571"
+    environment:
+      DEBUG: 0
+      SERVICES: s3
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      DOCKER_HOST: unix:///var/run/docker.sock
+    volumes:
+      - "${TMPDIR:-.}/.localstack:/tmp/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - ./back/resources/localstack/init-localstack.sh:/docker-entrypoint-initaws.d/init-localstack.sh
+    healthcheck:
+      test: ["CMD", "awslocal", "s3", "ls"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
 
 volumes:
   mongo_data:
