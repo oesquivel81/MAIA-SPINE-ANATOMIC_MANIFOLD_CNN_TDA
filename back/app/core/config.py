@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     mongo_collection: str = "file_metadata"
 
     redis_uri: str = "redis://localhost:6379/0"
+    normalization_profile_source: str = "redis"
+    normalization_bootstrap_redis_on_startup: bool = True
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

@@ -8,6 +8,8 @@ from app.components.s3_client import S3Component
 from app.core.config import Settings, get_settings
 from app.repositories.file_metadata_repository import FileMetadataRepository
 from app.services.file_service import FileService
+from app.services.normalization_profile_loader import NormalizationProfileLoader
+from app.services.normalization_service import NormalizationService
 
 
 class Container:
@@ -28,6 +30,15 @@ class Container:
             redis_component=self.redis,
         )
 
+    def normalization_profile_loader(self) -> NormalizationProfileLoader:
+        return NormalizationProfileLoader(
+            settings=self.settings,
+            redis_component=self.redis,
+        )
+
+    def normalization_service(self) -> NormalizationService:
+        return NormalizationService(profile_loader=self.normalization_profile_loader())
+
 
 @lru_cache
 def _build_container() -> Container:
@@ -40,3 +51,9 @@ def get_container() -> Container:
 
 def get_file_service(container: Container = Depends(get_container)) -> FileService:
     return container.file_service()
+
+
+def get_normalization_service(
+    container: Container = Depends(get_container),
+) -> NormalizationService:
+    return container.normalization_service()

@@ -2,7 +2,9 @@ from fastapi import APIRouter
 
 from app.api.v1.files_controller import router as files_router
 from app.api.v1.health_controller import router as health_router
+from app.api.v1.normalization_controller import router as normalization_router
 
 api_v1_router = APIRouter()
 api_v1_router.include_router(health_router, tags=["health"])
 api_v1_router.include_router(files_router, prefix="/files", tags=["files"])
+api_v1_router.include_router(normalization_router, prefix="/normalization", tags=["normalization"])
