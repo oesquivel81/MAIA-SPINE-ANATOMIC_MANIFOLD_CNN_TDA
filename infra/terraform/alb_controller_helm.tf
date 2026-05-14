@@ -2,12 +2,7 @@
 # This controller watches Ingress resources and creates ALBs automatically
 
 # Add the EKS Helm repository
-resource "helm_repository" "eks" {
-  count = local.use_eks ? 1 : 0
 
-  name = "eks"
-  url  = "https://aws.github.io/eks-charts"
-}
 
 # Create namespace for ALB Controller (kube-system already exists, but we ensure it's there)
 resource "kubernetes_namespace" "kube_system" {
@@ -40,7 +35,7 @@ resource "helm_release" "aws_load_balancer_controller" {
   count = local.use_eks ? 1 : 0
 
   name             = "aws-load-balancer-controller"
-  repository       = helm_repository.eks[0].name
+    repository       = "https://aws.github.io/eks-charts"
   chart            = "aws-load-balancer-controller"
   namespace        = "kube-system"
   version          = "2.7.0"

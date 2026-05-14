@@ -55,7 +55,7 @@ resource "aws_lb" "maia" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb[0].id]
-  subnets            = data.aws_subnets.eks_supported[0].ids
+  subnets            = data.aws_subnets.eks_supported.ids
 
   enable_deletion_protection = false
 
