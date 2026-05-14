@@ -5,9 +5,8 @@
 resource "helm_repository" "eks" {
   count = local.use_eks ? 1 : 0
 
-  name   = "eks"
-  url    = "https://aws.github.io/eks-charts"
-  repository_ca_file = ""
+  name = "eks"
+  url  = "https://aws.github.io/eks-charts"
 }
 
 # Create namespace for ALB Controller (kube-system already exists, but we ensure it's there)
@@ -18,7 +17,7 @@ resource "kubernetes_namespace" "kube_system" {
     name = "kube-system"
   }
 
-  depends_on = [aws_eks_cluster.maia]
+  depends_on = [aws_eks_cluster.maia[0]]
 }
 
 # Create service account for ALB Controller
