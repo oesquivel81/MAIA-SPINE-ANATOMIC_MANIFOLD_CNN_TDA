@@ -1,5 +1,7 @@
 # ECS Cluster
 resource "aws_ecs_cluster" "maia" {
+  count = local.use_ecs ? 1 : 0
+
   name = "${local.name_prefix}-cluster"
 
   setting {
@@ -17,6 +19,8 @@ resource "aws_ecs_cluster" "maia" {
 
 # CloudWatch Log Group for ECS
 resource "aws_cloudwatch_log_group" "ecs" {
+  count = local.use_ecs ? 1 : 0
+
   name              = "/ecs/${local.name_prefix}"
   retention_in_days = 7
 
@@ -30,6 +34,8 @@ resource "aws_cloudwatch_log_group" "ecs" {
 
 # ECS Task Definition
 resource "aws_ecs_task_definition" "maia" {
+  count = local.use_ecs ? 1 : 0
+
   family                   = local.name_prefix
   network_mode             = "awsvpc"
   requires_compatibilities = ["EC2"]
@@ -71,7 +77,7 @@ resource "aws_ecs_task_definition" "maia" {
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.ecs.name
+          "awslogs-group"         = aws_cloudwatch_log_group.ecs[0].name
           "awslogs-region"        = var.aws_region
           "awslogs-stream-prefix" = "ecs"
         }

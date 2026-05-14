@@ -26,3 +26,23 @@ class NormalizationResponse(BaseModel):
     output_image_base64: str
     runtime_metadata: dict[str, dict[str, float | int | str | bool | list[int] | None]]
     comparison: ComparisonResponse | None = None
+
+
+class ProfileStorageStatusResponse(BaseModel):
+    profiles_dir: str
+    index_file: str
+    source_count: int
+    source_sample_keys: list[str]
+    redis_key: str
+    redis_count: int
+    redis_sample_keys: list[str]
+    mongo_collection: str
+    mongo_count: int
+    mongo_sample_keys: list[str]
+    default_profile_source: str
+
+
+class ProfileBootstrapResponse(BaseModel):
+    loaded_to_redis: int
+    loaded_to_mongo: int
+    status: ProfileStorageStatusResponse

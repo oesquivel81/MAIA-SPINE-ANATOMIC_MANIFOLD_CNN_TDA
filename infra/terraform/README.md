@@ -1,17 +1,24 @@
-# MAIA Terraform Infrastructure - Simplified Setup
+# MAIA Terraform Infrastructure - ECS or EKS (Lab Friendly)
 
 ## Overview
 
-This Terraform configuration deploys a simplified infrastructure for MAIA backend on AWS without creating new IAM roles or VPC resources. It uses:
+This Terraform configuration deploys a lab-friendly infrastructure for MAIA without creating new IAM roles or VPC resources. It uses:
 
 - **Default VPC** (data source)
 - **Existing LabRole** (data source) 
 - **ECR** (Elastic Container Registry) - for Docker image storage
-- **ECS** (Elastic Container Service) - for container orchestration
+- **ECS** or **EKS** (selectable via `deployment_target`)
 - **CloudWatch Logs** - for application logging
 - **Security Groups** - for network access control
 
-## Architecture
+## Deployment modes
+
+- `deployment_target = "ecs"`: Creates ECR + ECS resources
+- `deployment_target = "eks"`: Creates ECR + EKS cluster + managed node group
+
+Both modes reuse the existing `LabRole` via data source and do not create IAM roles.
+
+## Architecture (ECS mode)
 
 ```
 Default VPC (existing)
@@ -67,6 +74,17 @@ terraform validate
 terraform plan
 ```
 
+If you want EKS mode, set this first in `terraform.tfvars`:
+
+```hcl
+deployment_target       = "eks"
+eks_cluster_version     = "1.30"
+eks_node_instance_types = ["t3.medium"]
+eks_node_desired_size   = 1
+eks_node_min_size       = 1
+eks_node_max_size       = 2
+```
+
 ### 4. Apply Configuration
 
 ```bash
@@ -119,6 +137,7 @@ docker push 847964925141.dkr.ecr.us-east-1.amazonaws.com/maia-dev-ecr:latest
 | `data_sources.tf` | Data sources (VPC, subnets, LabRole) |
 | `ecr.tf` | ECR repository and lifecycle policy |
 | `ecs.tf` | ECS cluster, task definition, log group |
+| `eks_minimal.tf` | Minimal EKS cluster and managed node group |
 | `security_groups.tf` | Security groups and ingress/egress rules |
 | `outputs.tf` | Output values |
 
@@ -142,8 +161,8 @@ The following files from the original configuration have been disabled:
 ## Next Steps
 
 1. Push Docker image to ECR (see instructions above)
-2. Create ECS Service for long-running deployments
-3. Add Application Load Balancer (ALB) for traffic distribution
+2. For EKS mode, follow `k8s/eks/README.md` to apply manifests and set backend image
+3. Add Application Load Balancer (ALB) for traffic distribution if permissions allow
 4. Configure CloudWatch alarms and monitoring
 5. Set up CI/CD pipeline for automated deployments
 

@@ -34,6 +34,7 @@ class Container:
         return NormalizationProfileLoader(
             settings=self.settings,
             redis_component=self.redis,
+            mongo_component=self.mongo,
         )
 
     def normalization_service(self) -> NormalizationService:
@@ -57,3 +58,9 @@ def get_normalization_service(
     container: Container = Depends(get_container),
 ) -> NormalizationService:
     return container.normalization_service()
+
+
+def get_normalization_profile_loader(
+    container: Container = Depends(get_container),
+) -> NormalizationProfileLoader:
+    return container.normalization_profile_loader()
