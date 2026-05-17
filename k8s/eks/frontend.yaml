@@ -35,17 +35,10 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: nginx:1.27-alpine
+          image: 847964925141.dkr.ecr.us-east-1.amazonaws.com/maia-dev-ecr:frontend-latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 80
-          volumeMounts:
-            - name: frontend-html
-              mountPath: /usr/share/nginx/html/index.html
-              subPath: index.html
-      volumes:
-        - name: frontend-html
-          configMap:
-            name: frontend-html
 ---
 apiVersion: v1
 kind: Service
