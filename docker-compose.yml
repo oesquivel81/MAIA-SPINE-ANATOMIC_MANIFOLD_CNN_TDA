@@ -35,7 +35,7 @@ services:
         condition: service_healthy
 
   mongo:
-    image: mongo:7
+    image: mongo:4.4.27
     container_name: maia_mongo
     ports:
       - "27017:27017"
@@ -43,7 +43,7 @@ services:
       - mongo_data:/data/db
       - ./back/resources/mongo/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test: ["CMD", "mongo", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 10s
       timeout: 5s
       retries: 8
@@ -75,7 +75,6 @@ services:
       AWS_SECRET_ACCESS_KEY: test
       DOCKER_HOST: unix:///var/run/docker.sock
     volumes:
-      - "${TMPDIR:-.}/.localstack:/tmp/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
       - ./back/resources/localstack/init-localstack.sh:/docker-entrypoint-initaws.d/init-localstack.sh
     healthcheck:
