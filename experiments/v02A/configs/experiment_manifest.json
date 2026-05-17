@@ -1,0 +1,181 @@
+{
+  "experiment_version_tag": "v.02.A",
+  "experiment_version_slug": "v02A",
+  "experiment_name": "first_cnn_generator_channel_to_2cnn_combined_v7_fullres",
+  "experiment_id": "v02A_first_cnn_generator_channel_to_2cnn_combined_v7_fullres_20260517_035024",
+  "timestamp": "20260517_035024",
+  "notes": "\nPrimera versión respaldada formalmente.\nIncluye canal combined_v7, full-res inference, checkpoint, joblib,\nscripts Python y archivos para restaurar en otro Colab.\n",
+  "model_class": "SmallUNetRegionAux",
+  "model_init_kwargs": {
+    "in_channels": 2,
+    "base_ch": 32,
+    "num_region_classes": 25,
+    "dropout": 0.05
+  },
+  "img_h": 256,
+  "img_w": 256,
+  "num_region_classes": 25,
+  "n_input_channels": 2,
+  "selected_filters": [
+    "combined_v7"
+  ],
+  "cfg": {
+    "seed": 42,
+    "img_h": 256,
+    "img_w": 256,
+    "num_regions": 24,
+    "num_region_classes": 25,
+    "input_filters": [
+      "combined_v7"
+    ],
+    "val_size": 0.2,
+    "batch_size": 4,
+    "num_workers": 0,
+    "debug_patient_key": "N_1",
+    "epochs": 100,
+    "lr": 0.0001,
+    "weight_decay": 1e-05,
+    "hard_topk_ratio": 0.1,
+    "grad_clip": 0.7,
+    "stage_plan": [
+      {
+        "name": "binary_foundation",
+        "start_pct": 0.0,
+        "end_pct": 0.15,
+        "profiles": [
+          "binary_strong",
+          "boundary_soft",
+          "region_soft"
+        ],
+        "lr_mult": 1.0,
+        "hard_topk_ratio": 0.25,
+        "grad_clip": 1.0,
+        "note": "Aprender columna/fondo y limpiar background."
+      },
+      {
+        "name": "boundary_refine",
+        "start_pct": 0.15,
+        "end_pct": 0.3,
+        "profiles": [
+          "binary_soft",
+          "boundary_strong",
+          "region_soft",
+          "inter_soft"
+        ],
+        "lr_mult": 0.9,
+        "hard_topk_ratio": 0.25,
+        "grad_clip": 1.0,
+        "note": "Refinar bordes externos sin apagar binaria."
+      },
+      {
+        "name": "intervertebral_refine",
+        "start_pct": 0.3,
+        "end_pct": 0.45,
+        "profiles": [
+          "binary_soft",
+          "boundary_soft",
+          "inter_strong",
+          "region_soft"
+        ],
+        "lr_mult": 0.85,
+        "hard_topk_ratio": 0.2,
+        "grad_clip": 1.0,
+        "note": "Aprender separaciones internas entre regiones."
+      },
+      {
+        "name": "region_strong",
+        "start_pct": 0.45,
+        "end_pct": 0.7,
+        "profiles": [
+          "binary_soft",
+          "boundary_soft",
+          "inter_soft",
+          "region_strong"
+        ],
+        "lr_mult": 0.75,
+        "hard_topk_ratio": 0.2,
+        "grad_clip": 1.0,
+        "note": "Atacar colapso regional y estabilizar clases 1..24."
+      },
+      {
+        "name": "binary_boundary_reclean",
+        "start_pct": 0.7,
+        "end_pct": 0.85,
+        "profiles": [
+          "binary_strong",
+          "boundary_strong",
+          "region_strong",
+          "inter_soft"
+        ],
+        "lr_mult": 0.55,
+        "hard_topk_ratio": 0.15,
+        "grad_clip": 0.8,
+        "note": "Re-limpiar fondo y bordes después de aprender regiones."
+      },
+      {
+        "name": "curve_soft_finish",
+        "start_pct": 0.85,
+        "end_pct": 1.01,
+        "profiles": [
+          "binary_soft",
+          "boundary_soft",
+          "inter_soft",
+          "region_strong",
+          "curve_soft"
+        ],
+        "lr_mult": 0.35,
+        "hard_topk_ratio": 0.1,
+        "grad_clip": 0.7,
+        "note": "Afinar curva y mantener regiones estables."
+      }
+    ],
+    "current_stage": "curve_soft_finish",
+    "current_stage_note": "Afinar curva y mantener regiones estables.",
+    "loss_weights": {
+      "binary_bce": 0.8,
+      "binary_dice": 1.4,
+      "binary_tversky": 0.6,
+      "binary_topk": 0.2,
+      "boundary_bce": 0.5,
+      "boundary_dice": 1.0,
+      "boundary_focal": 0.4,
+      "boundary_tversky": 0.4,
+      "boundary_topk": 0.2,
+      "region_ce": 2.8,
+      "region_dice": 2.4,
+      "region_focal": 1.2,
+      "region_topk": 1.0,
+      "region_outside": 5.0,
+      "inter_bce": 0.25,
+      "inter_dice": 0.4,
+      "inter_focal": 0.2,
+      "inter_tversky": 0.2,
+      "inter_topk": 0.1,
+      "curve_bce": 0.1,
+      "curve_dice": 0.25,
+      "curve_mse": 0.2
+    },
+    "current_lr": 3.5e-05,
+    "debug_mode": "full",
+    "print_every": 1,
+    "debug_first_batch": false,
+    "show_loss_table": false,
+    "max_train_batches": null,
+    "max_val_batches": null
+  },
+  "device_used": "cuda",
+  "use_amp": true,
+  "python_version": "3.12.13 (main, Mar  4 2026, 09:23:07) [GCC 11.4.0]",
+  "platform": "Linux-6.6.122+-x86_64-with-glibc2.35",
+  "restore_artifacts": {
+    "cloudpickle_model": "artifacts/model_cloudpickle.pkl",
+    "torchscript_model": "artifacts/model_torchscript.pt",
+    "model_summary": "reports/model_summary.txt",
+    "state_dict_keys": "reports/state_dict_keys.txt"
+  },
+  "restore_strategy": [
+    "try_model_architecture_py",
+    "fallback_cloudpickle",
+    "fallback_torchscript"
+  ]
+}
