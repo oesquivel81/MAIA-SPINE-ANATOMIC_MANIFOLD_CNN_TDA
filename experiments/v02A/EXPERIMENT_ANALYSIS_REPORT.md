@@ -3,7 +3,7 @@
 ## Included artifacts
 
 - Curve analysis: `artifacts/curve_analysis/`
-- KFold real experiment: `artifacts/kfold/`
+- KFold experiment: `artifacts/kfold/`
 
 ## Main reports
 
