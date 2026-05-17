@@ -2,8 +2,8 @@
   "experiment_version_tag": "v.02.A",
   "experiment_version_slug": "v02A",
   "experiment_name": "first_cnn_generator_channel_to_2cnn_combined_v7_fullres",
-  "experiment_id": "v02A_first_cnn_generator_channel_to_2cnn_combined_v7_fullres_20260517_212428",
-  "timestamp": "20260517_212428",
+  "experiment_id": "v02A_first_cnn_generator_channel_to_2cnn_combined_v7_fullres_20260517_224251",
+  "timestamp": "20260517_224251",
   "notes": "\nPrimera versión respaldada formalmente.\nIncluye canal combined_v7, full-res inference, checkpoint, joblib,\nscripts Python y archivos para restaurar en otro Colab.\n",
   "model_class": "SmallUNetRegionAux",
   "model_init_kwargs": {
@@ -32,137 +32,121 @@
     "batch_size": 4,
     "num_workers": 0,
     "debug_patient_key": "N_1",
-    "epochs": 120,
-    "lr": 2.5e-05,
+    "epochs": 140,
+    "lr": 8e-05,
     "weight_decay": 1e-05,
     "hard_topk_ratio": 0.1,
-    "grad_clip": 0.6,
+    "grad_clip": 0.7,
+    "print_every": 1,
     "stage_plan": [
       {
-        "name": "binary_boundary_foundation",
+        "name": "binary_foundation",
         "start_pct": 0.0,
-        "end_pct": 0.14,
+        "end_pct": 0.12,
         "profiles": [
           "binary_strong",
-          "boundary_keep",
-          "region_soft",
-          "inter_soft"
+          "boundary_soft",
+          "region_soft"
         ],
-        "lr_mult": 0.75,
-        "hard_topk_ratio": 0.16,
-        "grad_clip": 0.75,
-        "note": "Mantener binaria y limpiar borde antes de pedir región fuerte."
+        "lr_mult": 1.0,
+        "hard_topk_ratio": 0.25,
+        "grad_clip": 1.0,
+        "note": "Aprender columna/fondo estable sin curve ni intervertebral."
       },
       {
-        "name": "boundary_reclean",
-        "start_pct": 0.14,
-        "end_pct": 0.3,
-        "profiles": [
-          "binary_keep",
-          "boundary_strong",
-          "region_soft",
-          "inter_soft"
-        ],
-        "lr_mult": 0.65,
-        "hard_topk_ratio": 0.18,
-        "grad_clip": 0.75,
-        "note": "Refinar contorno sin perder máscara binaria."
-      },
-      {
-        "name": "region_refine_keep_binary",
-        "start_pct": 0.3,
-        "end_pct": 0.58,
-        "profiles": [
-          "binary_keep",
-          "boundary_keep",
-          "region_refine",
-          "inter_keep"
-        ],
-        "lr_mult": 0.55,
-        "hard_topk_ratio": 0.15,
-        "grad_clip": 0.7,
-        "note": "Refinar clases regionales manteniendo soporte binario."
-      },
-      {
-        "name": "region_boundary_rebalance",
-        "start_pct": 0.58,
-        "end_pct": 0.76,
-        "profiles": [
-          "binary_keep",
-          "boundary_strong",
-          "region_strong",
-          "inter_keep"
-        ],
-        "lr_mult": 0.45,
-        "hard_topk_ratio": 0.13,
-        "grad_clip": 0.7,
-        "note": "Rebalancear regiones y bordes para recuperar separación fina."
-      },
-      {
-        "name": "intervertebral_light_refine",
-        "start_pct": 0.76,
-        "end_pct": 0.88,
+        "name": "region_strong_main",
+        "start_pct": 0.12,
+        "end_pct": 0.5,
         "profiles": [
           "binary_soft",
-          "boundary_keep",
+          "boundary_soft",
           "region_strong",
-          "inter_strong"
+          "inter_soft"
         ],
-        "lr_mult": 0.38,
-        "hard_topk_ratio": 0.12,
-        "grad_clip": 0.65,
-        "note": "Ajustar separaciones internas sin destruir región."
+        "lr_mult": 0.9,
+        "hard_topk_ratio": 0.24,
+        "grad_clip": 1.0,
+        "note": "Aprender bloques anatómicos 1..24."
+      },
+      {
+        "name": "boundary_after_region",
+        "start_pct": 0.5,
+        "end_pct": 0.72,
+        "profiles": [
+          "binary_soft",
+          "boundary_strong",
+          "region_strong",
+          "inter_soft"
+        ],
+        "lr_mult": 0.7,
+        "hard_topk_ratio": 0.2,
+        "grad_clip": 0.9,
+        "note": "Refinar cortes después de que region ya aprendió estructura."
+      },
+      {
+        "name": "binary_boundary_reclean",
+        "start_pct": 0.72,
+        "end_pct": 0.86,
+        "profiles": [
+          "binary_strong",
+          "boundary_strong",
+          "region_strong",
+          "inter_soft"
+        ],
+        "lr_mult": 0.55,
+        "hard_topk_ratio": 0.16,
+        "grad_clip": 0.8,
+        "note": "Eliminar islas y reparar rupturas."
       },
       {
         "name": "curve_soft_finish",
-        "start_pct": 0.88,
+        "start_pct": 0.86,
         "end_pct": 1.01,
         "profiles": [
           "binary_soft",
           "boundary_soft",
           "region_strong",
-          "inter_keep",
+          "inter_soft",
           "curve_soft"
         ],
-        "lr_mult": 0.25,
+        "lr_mult": 0.35,
         "hard_topk_ratio": 0.1,
-        "grad_clip": 0.6,
-        "note": "Cierre suave con curva, conservando binaria y región."
+        "grad_clip": 0.7,
+        "note": "Afinar curve suavemente sin destruir region ni boundary."
       }
     ],
     "debug_mode": "full",
-    "print_every": 1,
     "debug_first_batch": false,
     "show_loss_table": false,
     "max_train_batches": null,
     "max_val_batches": null,
     "current_stage": "curve_soft_finish",
-    "current_stage_note": "Cierre suave con curva, conservando binaria y región.",
+    "current_stage_note": "Afinar curve suavemente sin destruir region ni boundary.",
     "loss_weights": {
-      "binary_bce": 0.35,
-      "binary_dice": 0.65,
-      "binary_tversky": 0.25,
-      "binary_topk": 0.08,
-      "boundary_bce": 0.5,
-      "boundary_dice": 1.05,
+      "binary_bce": 0.85,
+      "binary_dice": 1.5,
+      "binary_tversky": 0.65,
+      "binary_topk": 0.2,
+      "boundary_bce": 0.45,
+      "boundary_dice": 0.9,
       "boundary_focal": 0.35,
       "boundary_tversky": 0.35,
-      "boundary_topk": 0.12,
-      "region_ce": 2.45,
-      "region_dice": 2.0,
-      "region_focal": 0.9,
-      "region_topk": 0.65,
-      "region_outside": 3.8,
-      "inter_bce": 0.22,
-      "inter_dice": 0.45,
-      "inter_focal": 0.18,
-      "inter_tversky": 0.15,
-      "inter_topk": 0.06,
-      "curve_bce": 0.04,
-      "curve_dice": 0.08,
-      "curve_mse": 0.05
+      "boundary_topk": 0.15,
+      "region_ce": 3.4,
+      "region_dice": 2.8,
+      "region_focal": 1.35,
+      "region_topk": 1.1,
+      "region_outside": 5.5,
+      "inter_bce": 0.03,
+      "inter_dice": 0.05,
+      "inter_focal": 0.02,
+      "inter_tversky": 0.02,
+      "inter_topk": 0.0,
+      "curve_bce": 0.06,
+      "curve_dice": 0.16,
+      "curve_mse": 0.08
     },
-    "current_lr": 6.25e-06
+    "current_lr": 2.8e-05
   },
   "device_used": "cuda",
   "use_amp": true,
