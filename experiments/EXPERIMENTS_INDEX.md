@@ -33,3 +33,21 @@ print(manifest.get('_loaded_with'))
 ```
 
 ---
+
+<!-- v02A_first_cnn_generator_channel_to_2cnn_combined_v7_fullres_20260517_035024 — curve+kfold -->
+
+## v.02.A — first_cnn_generator_channel_to_2cnn_combined_v7_fullres
+
+- Experiment ID: `v02A_first_cnn_generator_channel_to_2cnn_combined_v7_fullres_20260517_035024`
+- Version slug: `v02A`
+- Repo path: `experiments/v02A`
+- Branch: `experiment/v02A`
+
+### Added analysis
+
+- Curve analysis: `artifacts/curve_analysis/`
+- KFold: `artifacts/kfold/`
+- Curve report: `artifacts/curve_analysis/CURVE_ANALYSIS_REPORT.md`
+- KFold report: `artifacts/kfold/KFOLD_REPORT.md`
+
+---
