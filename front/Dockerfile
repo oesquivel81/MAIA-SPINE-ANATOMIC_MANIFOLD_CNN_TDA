@@ -1,10 +1,13 @@
 # Build stage
-FROM node:20-alpine AS builder
-WORKDIR /app
+FROM node:22-alpine AS builder
 
-# Install pnpm and dependencies
+WORKDIR /app
+ENV CI=true
 COPY package.json pnpm-lock.yaml ./
-RUN corepack enable && corepack pnpm install --frozen-lockfile
+
+# Force pnpm to skip the interactive native module script blocks:
+RUN corepack enable && corepack pnpm config set ignore-scripts true && corepack pnpm install --no-frozen-lockfile
+
 
 COPY . .
 RUN corepack pnpm build
@@ -13,5 +16,5 @@ RUN corepack pnpm build
 FROM nginx:1.27-alpine
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+EXPOSE 3000
+#CMD ["corepack", "pnpm", "preview", "--port", "3000", "--host", "0.0.0.0"]
