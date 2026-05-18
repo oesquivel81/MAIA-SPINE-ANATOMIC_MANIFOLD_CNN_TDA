@@ -1,6 +1,6 @@
 {
-  "tag": "v02A_kfold_3seeds_10epochs",
-  "timestamp": "20260518_055158",
+  "tag": "v02A_kfold_REAL_3seeds_10epochs",
+  "timestamp": "20260518_055211",
   "seeds": [
     42,
     123,

@@ -2,10 +2,10 @@
   "experiment_version_tag": "v.02.A",
   "experiment_version_slug": "v02A",
   "experiment_name": "first_cnn_generator_channel_to_2cnn_combined_v7_fullres",
-  "timestamp": "20260518_001835",
-  "source_notebook_path": "/content/drive/MyDrive/Colab Notebooks/MAIA_2_VALIDATION_PIPELINE_SECOND_STAGE.ipynb",
-  "notebook_root_copy": "/content/MAIA_EXPERIMENT_EXPORTS/v02A_first_cnn_generator_channel_to_2cnn_combined_v7_fullres_20260517_212428/MAIA_2_VALIDATION_PIPELINE_SECOND_STAGE__v02A__20260518_001835.ipynb",
-  "notebook_folder_copy": "/content/MAIA_EXPERIMENT_EXPORTS/v02A_first_cnn_generator_channel_to_2cnn_combined_v7_fullres_20260517_212428/notebooks/MAIA_2_VALIDATION_PIPELINE_SECOND_STAGE__v02A__20260518_001835.ipynb",
-  "notebook_file_name": "MAIA_2_VALIDATION_PIPELINE_SECOND_STAGE__v02A__20260518_001835.ipynb",
-  "sha256": "dab67ddab85b59f7bdfa637cd30d74a06f27ed7e12336fcb55154830918b2352"
+  "timestamp": "20260518_083837",
+  "source_notebook_path": "/content/drive/MyDrive/Colab Notebooks/multihead_flexible_stages_combined_v7_FAST_V.06.ipynb",
+  "notebook_root_copy": "/content/MAIA_EXPERIMENT_EXPORTS/v02A_first_cnn_generator_channel_to_2cnn_combined_v7_fullres_20260518_054446/multihead_flexible_stages_combined_v7_FAST_V.06__v02A__20260518_083837.ipynb",
+  "notebook_folder_copy": "/content/MAIA_EXPERIMENT_EXPORTS/v02A_first_cnn_generator_channel_to_2cnn_combined_v7_fullres_20260518_054446/notebooks/multihead_flexible_stages_combined_v7_FAST_V.06__v02A__20260518_083837.ipynb",
+  "notebook_file_name": "multihead_flexible_stages_combined_v7_FAST_V.06__v02A__20260518_083837.ipynb",
+  "sha256": "a1ee98b0c791ab5de0225dc332cf3b337c15d7b6314ef7340c76fac9713780af"
 }

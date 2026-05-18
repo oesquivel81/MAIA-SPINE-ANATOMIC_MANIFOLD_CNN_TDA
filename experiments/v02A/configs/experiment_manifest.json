@@ -187,8 +187,8 @@
   "kfold": {
     "artifact_path": "artifacts/kfold",
     "report": "artifacts/kfold/KFOLD_REPORT.md",
-    "config": "artifacts/kfold/kfold_config.json",
-    "tables": "artifacts/kfold/tables",
-    "plots": "artifacts/kfold/plots"
+    "summary": "artifacts/kfold/tables/kfold_summary_by_seed.csv",
+    "history": "artifacts/kfold/tables/kfold_history_all.csv",
+    "best": "artifacts/kfold/tables/kfold_best_by_seed_fold.csv"
   }
 }
