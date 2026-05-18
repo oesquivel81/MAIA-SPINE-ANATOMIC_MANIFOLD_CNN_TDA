@@ -1,10 +1,10 @@
 {
-  "curve_analysis_root": "/content/CURVE_ANALYSIS_v02A_curve_error_analysis_20260518_041011",
-  "drive_curve_analysis_root": "/content/drive/MyDrive/TDA_PIPELINE/CURVE_ANALYSIS/CURVE_ANALYSIS_v02A_curve_error_analysis_20260518_041011",
+  "curve_analysis_root": "/content/CURVE_ANALYSIS_v02A_curve_error_analysis_20260518_050126",
+  "drive_curve_analysis_root": "/content/drive/MyDrive/TDA_PIPELINE/CURVE_ANALYSIS/CURVE_ANALYSIS_v02A_curve_error_analysis_20260518_050126",
   "run_scope": "all",
   "max_patients": null,
   "n_patients_attempted": 249,
   "n_patients_ok": 249,
   "n_patients_failed": 0,
-  "summary_csv": "/content/CURVE_ANALYSIS_v02A_curve_error_analysis_20260518_041011/tables/curve_global_summary_by_comparison.csv"
+  "summary_csv": "/content/CURVE_ANALYSIS_v02A_curve_error_analysis_20260518_050126/tables/curve_global_summary_by_comparison.csv"
 }
