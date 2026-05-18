@@ -2,8 +2,8 @@
   "experiment_version_tag": "v.02.A",
   "experiment_version_slug": "v02A",
   "experiment_name": "first_cnn_generator_channel_to_2cnn_combined_v7_fullres",
-  "experiment_id": "v02A_first_cnn_generator_channel_to_2cnn_combined_v7_fullres_20260518_050628",
-  "timestamp": "20260518_050628",
+  "experiment_id": "v02A_first_cnn_generator_channel_to_2cnn_combined_v7_fullres_20260518_054501",
+  "timestamp": "20260518_054501",
   "notes": "\nPrimera versión respaldada formalmente.\nIncluye canal combined_v7, full-res inference, checkpoint, joblib,\nscripts Python y archivos para restaurar en otro Colab.\n",
   "model_class": "SmallUNetRegionAux",
   "model_init_kwargs": {
@@ -32,46 +32,46 @@
     "batch_size": 4,
     "num_workers": 0,
     "debug_patient_key": "N_1",
-    "epochs": 160,
+    "epochs": 150,
     "lr": 7e-05,
-    "weight_decay": 1e-05,
+    "weight_decay": 1.5e-05,
     "hard_topk_ratio": 0.08,
     "grad_clip": 0.7,
     "print_every": 1,
     "stage_plan": [
       {
-        "name": "binary_foundation_short",
+        "name": "binary_foundation_clean",
         "start_pct": 0.0,
-        "end_pct": 0.1,
+        "end_pct": 0.14,
         "profiles": [
           "binary_strong",
           "boundary_soft",
           "region_soft"
         ],
         "lr_mult": 1.0,
-        "hard_topk_ratio": 0.24,
-        "grad_clip": 1.0,
-        "note": "Base binaria rápida."
+        "hard_topk_ratio": 0.26,
+        "grad_clip": 0.9,
+        "note": "Base limpia anti-fondo."
       },
       {
-        "name": "region_long_block_learning",
-        "start_pct": 0.1,
-        "end_pct": 0.62,
+        "name": "region_with_outside_penalty",
+        "start_pct": 0.14,
+        "end_pct": 0.52,
         "profiles": [
           "binary_soft",
           "boundary_soft",
           "region_strong",
           "inter_soft"
         ],
-        "lr_mult": 0.88,
-        "hard_topk_ratio": 0.25,
-        "grad_clip": 1.0,
-        "note": "Fase larga para aprender clases/regiones 1..24."
+        "lr_mult": 0.82,
+        "hard_topk_ratio": 0.24,
+        "grad_clip": 0.9,
+        "note": "Region fuerte con castigo fuera de columna."
       },
       {
-        "name": "boundary_cut_refine",
-        "start_pct": 0.62,
-        "end_pct": 0.78,
+        "name": "boundary_control",
+        "start_pct": 0.52,
+        "end_pct": 0.68,
         "profiles": [
           "binary_soft",
           "boundary_strong",
@@ -80,27 +80,27 @@
         ],
         "lr_mult": 0.62,
         "hard_topk_ratio": 0.18,
-        "grad_clip": 0.9,
-        "note": "Cortes después de region."
+        "grad_clip": 0.8,
+        "note": "Boundary controlado sin soltar outside."
       },
       {
-        "name": "binary_repair",
-        "start_pct": 0.78,
-        "end_pct": 0.9,
+        "name": "binary_reclean_strong",
+        "start_pct": 0.68,
+        "end_pct": 0.88,
         "profiles": [
           "binary_strong",
-          "boundary_soft",
+          "boundary_strong",
           "region_strong",
           "inter_soft"
         ],
         "lr_mult": 0.45,
         "hard_topk_ratio": 0.14,
-        "grad_clip": 0.8,
-        "note": "Reparar rupturas de máscara."
+        "grad_clip": 0.75,
+        "note": "Re-limpiar islas y ruido."
       },
       {
-        "name": "curve_soft_final",
-        "start_pct": 0.9,
+        "name": "curve_soft_finish",
+        "start_pct": 0.88,
         "end_pct": 1.01,
         "profiles": [
           "binary_soft",
@@ -109,10 +109,10 @@
           "inter_soft",
           "curve_soft"
         ],
-        "lr_mult": 0.28,
+        "lr_mult": 0.25,
         "hard_topk_ratio": 0.08,
         "grad_clip": 0.7,
-        "note": "Curve final suave."
+        "note": "Curve final con outside activo."
       }
     ],
     "debug_mode": "full",
@@ -120,23 +120,23 @@
     "show_loss_table": false,
     "max_train_batches": null,
     "max_val_batches": null,
-    "current_stage": "curve_soft_final",
-    "current_stage_note": "Curve final suave.",
+    "current_stage": "curve_soft_finish",
+    "current_stage_note": "Curve final con outside activo.",
     "loss_weights": {
-      "binary_bce": 0.8,
-      "binary_dice": 1.4,
-      "binary_tversky": 0.6,
-      "binary_topk": 0.18,
-      "boundary_bce": 0.4,
-      "boundary_dice": 0.8,
+      "binary_bce": 0.9,
+      "binary_dice": 1.55,
+      "binary_tversky": 0.7,
+      "binary_topk": 0.22,
+      "boundary_bce": 0.42,
+      "boundary_dice": 0.85,
       "boundary_focal": 0.3,
       "boundary_tversky": 0.3,
-      "boundary_topk": 0.1,
-      "region_ce": 3.6,
-      "region_dice": 3.0,
-      "region_focal": 1.45,
+      "boundary_topk": 0.12,
+      "region_ce": 3.2,
+      "region_dice": 2.6,
+      "region_focal": 1.3,
       "region_topk": 1.2,
-      "region_outside": 5.7,
+      "region_outside": 6.2,
       "inter_bce": 0.02,
       "inter_dice": 0.04,
       "inter_focal": 0.02,
@@ -146,7 +146,7 @@
       "curve_dice": 0.14,
       "curve_mse": 0.07
     },
-    "current_lr": 1.96e-05
+    "current_lr": 1.75e-05
   },
   "device_used": "cuda",
   "use_amp": true,
