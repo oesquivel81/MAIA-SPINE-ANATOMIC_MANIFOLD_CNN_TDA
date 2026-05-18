@@ -11,124 +11,119 @@
   "batch_size": 4,
   "num_workers": 0,
   "debug_patient_key": "N_1",
-  "epochs": 170,
-  "lr": 2.5e-05,
-  "weight_decay": 1e-05,
-  "hard_topk_ratio": 0.12,
+  "epochs": 150,
+  "lr": 7e-05,
+  "weight_decay": 1.5e-05,
+  "hard_topk_ratio": 0.08,
   "grad_clip": 0.7,
+  "print_every": 1,
   "stage_plan": [
     {
-      "name": "binary_region_foundation",
+      "name": "binary_foundation_clean",
       "start_pct": 0.0,
-      "end_pct": 0.22,
+      "end_pct": 0.14,
       "profiles": [
         "binary_strong",
-        "region_soft",
         "boundary_soft",
-        "inter_soft",
-        "curve_soft"
+        "region_soft"
       ],
       "lr_mult": 1.0,
-      "hard_topk_ratio": 0.25,
-      "grad_clip": 1.0,
-      "note": "Primero aprender columna y regiones con poco borde."
+      "hard_topk_ratio": 0.26,
+      "grad_clip": 0.9,
+      "note": "Base limpia anti-fondo."
     },
     {
-      "name": "binary_region_boundary",
-      "start_pct": 0.22,
-      "end_pct": 0.42,
+      "name": "region_with_outside_penalty",
+      "start_pct": 0.14,
+      "end_pct": 0.52,
       "profiles": [
-        "binary_strong",
-        "region_strong",
+        "binary_soft",
         "boundary_soft",
-        "inter_soft",
-        "curve_soft"
+        "region_strong",
+        "inter_soft"
       ],
-      "lr_mult": 0.85,
-      "hard_topk_ratio": 0.23,
-      "grad_clip": 0.95,
-      "note": "Subir región sin perder binaria; borde todavía moderado."
+      "lr_mult": 0.82,
+      "hard_topk_ratio": 0.24,
+      "grad_clip": 0.9,
+      "note": "Region fuerte con castigo fuera de columna."
     },
     {
-      "name": "region_boundary_refine",
-      "start_pct": 0.42,
+      "name": "boundary_control",
+      "start_pct": 0.52,
       "end_pct": 0.68,
       "profiles": [
         "binary_soft",
-        "region_strong",
         "boundary_strong",
-        "inter_soft",
-        "curve_soft"
+        "region_strong",
+        "inter_soft"
       ],
-      "lr_mult": 0.7,
-      "hard_topk_ratio": 0.2,
-      "grad_clip": 0.9,
-      "note": "Más región y borde, manteniendo binaria."
+      "lr_mult": 0.62,
+      "hard_topk_ratio": 0.18,
+      "grad_clip": 0.8,
+      "note": "Boundary controlado sin soltar outside."
     },
     {
-      "name": "binary_region_boundary_reclean",
+      "name": "binary_reclean_strong",
       "start_pct": 0.68,
       "end_pct": 0.88,
       "profiles": [
         "binary_strong",
-        "region_strong",
         "boundary_strong",
-        "inter_soft",
-        "curve_soft"
+        "region_strong",
+        "inter_soft"
       ],
-      "lr_mult": 0.5,
-      "hard_topk_ratio": 0.16,
-      "grad_clip": 0.8,
-      "note": "Re-limpiar fondo, región y borde juntos."
+      "lr_mult": 0.45,
+      "hard_topk_ratio": 0.14,
+      "grad_clip": 0.75,
+      "note": "Re-limpiar islas y ruido."
     },
     {
-      "name": "region_final_no_curve",
+      "name": "curve_soft_finish",
       "start_pct": 0.88,
       "end_pct": 1.01,
       "profiles": [
         "binary_soft",
+        "boundary_soft",
         "region_strong",
-        "boundary_strong",
         "inter_soft",
         "curve_soft"
       ],
-      "lr_mult": 0.32,
-      "hard_topk_ratio": 0.12,
+      "lr_mult": 0.25,
+      "hard_topk_ratio": 0.08,
       "grad_clip": 0.7,
-      "note": "Cierre fino de región y borde; curva apagada."
+      "note": "Curve final con outside activo."
     }
   ],
   "debug_mode": "full",
-  "print_every": 1,
   "debug_first_batch": false,
   "show_loss_table": false,
   "max_train_batches": null,
   "max_val_batches": null,
-  "current_stage": "region_final_no_curve",
-  "current_stage_note": "Cierre fino de región y borde; curva apagada.",
+  "current_stage": "curve_soft_finish",
+  "current_stage_note": "Curve final con outside activo.",
   "loss_weights": {
-    "binary_bce": 0.95,
-    "binary_dice": 1.65,
-    "binary_tversky": 0.72,
-    "binary_topk": 0.24,
-    "boundary_bce": 1.1,
-    "boundary_dice": 2.35,
-    "boundary_focal": 1.0,
-    "boundary_tversky": 0.9,
-    "boundary_topk": 0.55,
-    "region_ce": 3.25,
-    "region_dice": 2.85,
-    "region_focal": 1.45,
+    "binary_bce": 0.9,
+    "binary_dice": 1.55,
+    "binary_tversky": 0.7,
+    "binary_topk": 0.22,
+    "boundary_bce": 0.42,
+    "boundary_dice": 0.85,
+    "boundary_focal": 0.3,
+    "boundary_tversky": 0.3,
+    "boundary_topk": 0.12,
+    "region_ce": 3.2,
+    "region_dice": 2.6,
+    "region_focal": 1.3,
     "region_topk": 1.2,
-    "region_outside": 5.6,
-    "inter_bce": 0.08,
-    "inter_dice": 0.15,
-    "inter_focal": 0.05,
-    "inter_tversky": 0.05,
-    "inter_topk": 0.02,
-    "curve_bce": 0.0,
-    "curve_dice": 0.0,
-    "curve_mse": 0.0
+    "region_outside": 6.2,
+    "inter_bce": 0.02,
+    "inter_dice": 0.04,
+    "inter_focal": 0.02,
+    "inter_tversky": 0.02,
+    "inter_topk": 0.0,
+    "curve_bce": 0.05,
+    "curve_dice": 0.14,
+    "curve_mse": 0.07
   },
-  "current_lr": 8.000000000000001e-06
+  "current_lr": 1.75e-05
 }
