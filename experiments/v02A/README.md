@@ -3,7 +3,7 @@
 ## Experiment ID
 
 ```text
-v02A_first_cnn_generator_channel_to_2cnn_combined_v7_fullres_20260517_035024
+v02A_first_cnn_generator_channel_to_2cnn_combined_v7_fullres_20260518_054501
 ```
 
 ## Version
