@@ -1,4 +1,5 @@
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001/api/v1';
 
 export interface FileMetadata {
   file_id: string;
@@ -10,14 +11,67 @@ export interface FileMetadata {
 
 export interface NormalizationResult {
   success: boolean;
-  original_image_url?: string;
-  normalized_image_url?: string;
-  profile_used?: string;
-  comparison_data?: {
-    original_stats: Record<string, number>;
-    normalized_stats: Record<string, number>;
+  profile_source: string;
+  implementation_map: string[];
+  closest_profile_key: string;
+  closest_profile_distance: number;
+  closest_profile_summary: Record<string, number | string | boolean | null>;
+  input_stats: Record<string, number>;
+  output_stats: Record<string, number>;
+  output_shape: number[];
+  output_image_base64: string;
+  output_image_url?: string;
+  normalized_image_url: string;
+  runtime_metadata: Record<string, Record<string, number | string | boolean | (number | string | boolean | null)[] | null>>;
+  analysis?: {
+    curve?: {
+      detected?: boolean;
+      direction?: string;
+      estimated_cobb_angle?: number;
+      severity?: string;
+      major_curve_span?: string;
+      horizontal_shift?: number;
+      max_offset?: number;
+      curve_points?: Array<{ x: number; y: number }>;
+    };
+    color_index?: {
+      average_intensity?: number;
+      median_intensity?: number;
+      bands?: Array<{
+        range: string;
+        percentage: number;
+        color: string;
+        count: number;
+      }>;
+    };
+    segmentation?: {
+      origin?: string;
+      centroid?: { x: number; y: number };
+      highlighted_vertebrae?: string[];
+      curve_type?: string;
+      spine_center_line?: Array<{ x: number; y: number }>;
+    };
+    heatmap_data?: number[][];
+    measurements?: Array<{
+      parameter: string;
+      value: number | string;
+      unit?: string;
+      normal_range?: string;
+      status?: 'normal' | 'warning' | 'critical' | string;
+    }>;
   };
-  error?: string;
+  comparison?: {
+    compare_profile_source: string;
+    compare_profile_summary: Record<string, number | string | boolean | null>;
+    compare_input_stats: Record<string, number>;
+    compare_output_stats: Record<string, number>;
+    compare_output_shape: number[];
+    compare_output_image_base64: string;
+    compare_output_image_url?: string;
+    comparison_visualization_base64: string;
+    comparison_visualization_url?: string;
+    compare_profile_payload: Record<string, unknown>;
+  } | null;
 }
 
 export interface ProfileStatus {
@@ -41,7 +95,9 @@ class ApiService {
     });
 
     if (!response.ok) {
-      throw new Error(`Upload failed: ${response.statusText}`);
+      const body = await response.json().catch(() => null);
+      const message = body?.detail || body?.error || response.statusText;
+      throw new Error(`Upload failed: ${message}`);
     }
 
     return response.json();
@@ -51,7 +107,9 @@ class ApiService {
     const response = await fetch(`${API_BASE_URL}/files/${fileId}`);
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch file metadata: ${response.statusText}`);
+      const body = await response.json().catch(() => null);
+      const message = body?.detail || body?.error || response.statusText;
+      throw new Error(`Failed to fetch file metadata: ${message}`);
     }
 
     return response.json();
@@ -83,11 +141,21 @@ class ApiService {
       body: formData,
     });
 
+    const body = await response.json().catch(() => null);
     if (!response.ok) {
-      throw new Error(`Normalization failed: ${response.statusText}`);
+      const message = body?.detail || body?.error || response.statusText;
+      throw new Error(`Normalization failed: ${message}`);
     }
 
-    return response.json();
+    if (!body || !body.output_image_base64) {
+      throw new Error('Backend returned an invalid normalization response');
+    }
+
+    return {
+      ...body,
+      normalized_image_url:
+        body.output_image_url || `data:image/png;base64,${body.output_image_base64}`,
+    } as NormalizationResult;
   }
 
   async getProfileStatus(sampleSize: number = 5): Promise<ProfileStatus> {
@@ -96,7 +164,9 @@ class ApiService {
     );
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch profile status: ${response.statusText}`);
+      const body = await response.json().catch(() => null);
+      const message = body?.detail || body?.error || response.statusText;
+      throw new Error(`Failed to fetch profile status: ${message}`);
     }
 
     return response.json();
@@ -112,7 +182,9 @@ class ApiService {
     });
 
     if (!response.ok) {
-      throw new Error(`Bootstrap failed: ${response.statusText}`);
+      const body = await response.json().catch(() => null);
+      const message = body?.detail || body?.error || response.statusText;
+      throw new Error(`Bootstrap failed: ${message}`);
     }
 
     return response.json();
@@ -122,7 +194,9 @@ class ApiService {
     const response = await fetch(`${API_BASE_URL}/health`);
 
     if (!response.ok) {
-      throw new Error(`Health check failed: ${response.statusText}`);
+      const body = await response.json().catch(() => null);
+      const message = body?.detail || body?.error || response.statusText;
+      throw new Error(`Health check failed: ${message}`);
     }
 
     return response.json();

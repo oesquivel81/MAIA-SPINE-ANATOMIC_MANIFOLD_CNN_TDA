@@ -25,53 +25,42 @@ export function HeatmapVisualization({
 
     ctx.clearRect(0, 0, width, height);
 
-    const gradient = ctx.createLinearGradient(width / 2, 0, width / 2, height);
-    gradient.addColorStop(0, '#1e3a8a');
-    gradient.addColorStop(0.25, '#3b82f6');
-    gradient.addColorStop(0.5, '#10b981');
-    gradient.addColorStop(0.75, '#fbbf24');
-    gradient.addColorStop(1, '#ef4444');
+    const rows = data?.length ?? 24;
+    const cols = data?.[0]?.length ?? 12;
+    const cellWidth = width / cols;
+    const cellHeight = height / rows;
 
-    const centerX = width / 2;
-    const centerY = height / 2;
+    const heatmapData = data ?? Array.from({ length: rows }, (_, row) =>
+      Array.from({ length: cols }, (_, col) =>
+        (Math.sin((row / rows) * Math.PI * 2 + rotation / 50) + 1) / 2
+      )
+    );
 
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.rotate((rotation * Math.PI) / 180);
-    ctx.translate(-centerX, -centerY);
+    for (let row = 0; row < heatmapData.length; row++) {
+      for (let col = 0; col < (heatmapData[row]?.length ?? 0); col++) {
+        const intensity = heatmapData[row][col] ?? 0;
+        ctx.fillStyle = getHeatmapColor(intensity);
+        ctx.fillRect(col * cellWidth, row * cellHeight, cellWidth, cellHeight);
+      }
+    }
 
-    const spineHeight = height * 0.7;
-    const spineWidth = width * 0.15;
-    const spineX = centerX - spineWidth / 2;
-    const spineY = height * 0.15;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 1;
 
-    const segmentCount = 24;
-    const segmentHeight = spineHeight / segmentCount;
-
-    for (let i = 0; i < segmentCount; i++) {
-      const y = spineY + i * segmentHeight;
-      const intensity = Math.sin((i / segmentCount) * Math.PI * 2 + rotation / 50);
-      const normalizedIntensity = (intensity + 1) / 2;
-
-      ctx.fillStyle = getHeatmapColor(normalizedIntensity);
-
-      const curve = Math.sin((i / segmentCount) * Math.PI * 2) * 20;
-
+    for (let row = 1; row < rows; row++) {
       ctx.beginPath();
-      ctx.moveTo(spineX + curve, y);
-      ctx.lineTo(spineX + spineWidth + curve, y);
-      ctx.lineTo(spineX + spineWidth + curve, y + segmentHeight + 1);
-      ctx.lineTo(spineX + curve, y + segmentHeight + 1);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
-      ctx.lineWidth = 1;
+      ctx.moveTo(0, row * cellHeight);
+      ctx.lineTo(width, row * cellHeight);
       ctx.stroke();
     }
 
-    ctx.restore();
-  }, [rotation]);
+    for (let col = 1; col < cols; col++) {
+      ctx.beginPath();
+      ctx.moveTo(col * cellWidth, 0);
+      ctx.lineTo(col * cellWidth, height);
+      ctx.stroke();
+    }
+  }, [data, rotation]);
 
   const getHeatmapColor = (value: number): string => {
     if (value < 0.2) return '#1e3a8a';

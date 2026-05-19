@@ -1,8 +1,9 @@
 interface SpineDiagramProps {
   highlightedVertebrae?: string[];
+  curveType?: string;
 }
 
-export function SpineDiagram({ highlightedVertebrae = [] }: SpineDiagramProps) {
+export function SpineDiagram({ highlightedVertebrae = [], curveType }: SpineDiagramProps) {
   const vertebrae = [
     { id: 'C1', label: 'C1', y: 50 },
     { id: 'C2', label: 'C2', y: 70 },
@@ -33,7 +34,14 @@ export function SpineDiagram({ highlightedVertebrae = [] }: SpineDiagramProps) {
 
   return (
     <div className="bg-gray-900 rounded-lg p-4 border border-gray-700">
-      <h3 className="text-sm text-gray-200 mb-4">Diagrama de columna</h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm text-gray-200">Diagrama de columna</h3>
+        {curveType ? (
+          <span className="text-xs text-gray-400 uppercase tracking-[0.12em]">
+            {curveType}
+          </span>
+        ) : null}
+      </div>
       <div className="flex justify-center">
         <svg width="200" height="620" viewBox="0 0 200 620">
           <defs>

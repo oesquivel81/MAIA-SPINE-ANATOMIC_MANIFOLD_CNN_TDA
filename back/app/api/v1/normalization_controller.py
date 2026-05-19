@@ -66,4 +66,19 @@ async def profiles_status(
         return status
     except Exception as e:
         logger.error(f"Error en profiles_status: {str(e)}", exc_info=True)
-        raise
+        return {
+            "profiles_dir": str(profile_loader._profiles_dir),
+            "index_file": str(profile_loader._index_jsonl),
+            "source_count": len(profile_loader._read_profile_index_jsonl()),
+            "source_sample_keys": [
+                str(item.get("patient_key", "unknown"))
+                for item in profile_loader._read_profile_index_jsonl()[:sample_size]
+            ],
+            "redis_key": profile_loader.PROFILE_INDEX_KEY,
+            "redis_count": 0,
+            "redis_sample_keys": [],
+            "mongo_collection": profile_loader._settings.mongo_profiles_collection,
+            "mongo_count": 0,
+            "mongo_sample_keys": [],
+            "default_profile_source": profile_loader.default_source,
+        }

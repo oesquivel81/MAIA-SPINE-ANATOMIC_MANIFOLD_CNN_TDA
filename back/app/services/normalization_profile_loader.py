@@ -97,20 +97,43 @@ class NormalizationProfileLoader:
         source_keys = [str(item.get("patient_key", "unknown")) for item in source_records[:sample_size]]
         logger.debug(f"Archivo fuente: {len(source_records)} perfiles, muestra: {source_keys}")
 
-        redis_raw = await self.redis_client.get(self.PROFILE_INDEX_KEY)
         redis_count = 0
         redis_keys: list[str] = []
-        if redis_raw:
-            redis_profiles = json.loads(redis_raw)
-            if isinstance(redis_profiles, list):
-                redis_count = len(redis_profiles)
-                redis_keys = [str(item.get("patient_key", "unknown")) for item in redis_profiles[:sample_size]]
-        logger.debug(f"Redis: {redis_count} perfiles, muestra: {redis_keys}")
+        mongo_count = 0
+        mongo_keys: list[str] = []
 
-        mongo_count = await self.mongo_collection.count_documents({})
-        mongo_docs = await self.mongo_collection.find({}, {"patient_key": 1, "_id": 0}).limit(sample_size).to_list(length=sample_size)
-        mongo_keys = [str(doc.get("patient_key", "unknown")) for doc in mongo_docs]
-        logger.debug(f"Mongo: {mongo_count} perfiles, muestra: {mongo_keys}")
+        if self.default_source == "json":
+            logger.debug("Fuente de perfiles es JSON; omitiendo verificaciones de Redis/Mongo")
+        else:
+            try:
+                redis_raw = await self.redis_client.get(self.PROFILE_INDEX_KEY)
+                if redis_raw:
+                    redis_profiles = json.loads(redis_raw)
+                    if isinstance(redis_profiles, list):
+                        redis_count = len(redis_profiles)
+                        redis_keys = [
+                            str(item.get("patient_key", "unknown"))
+                            for item in redis_profiles[:sample_size]
+                        ]
+            except Exception as exc:
+                logger.warning(
+                    f"No se pudo obtener el estado de Redis: {str(exc)}. Continuando sin Redis.",
+                    exc_info=True,
+                )
+            logger.debug(f"Redis: {redis_count} perfiles, muestra: {redis_keys}")
+
+            try:
+                mongo_count = await self.mongo_collection.count_documents({})
+                mongo_docs = await self.mongo_collection.find(
+                    {}, {"patient_key": 1, "_id": 0}
+                ).limit(sample_size).to_list(length=sample_size)
+                mongo_keys = [str(doc.get("patient_key", "unknown")) for doc in mongo_docs]
+            except Exception as exc:
+                logger.warning(
+                    f"No se pudo obtener el estado de Mongo: {str(exc)}. Continuando sin Mongo.",
+                    exc_info=True,
+                )
+            logger.debug(f"Mongo: {mongo_count} perfiles, muestra: {mongo_keys}")
 
         return {
             "profiles_dir": str(self._profiles_dir),
