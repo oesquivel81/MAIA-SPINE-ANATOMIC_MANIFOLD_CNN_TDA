@@ -1,11 +1,11 @@
 {
   "experiment_version_tag": "v.02.A",
   "experiment_version_slug": "v02A",
-  "experiment_name": "first_cnn_generator_channel_to_2cnn_combined_v7_fullres",
-  "timestamp": "20260517_073209",
-  "source_notebook_path": "/content/drive/MyDrive/Colab Notebooks/FINETUNIG_DEBUG_CNN_CNN_CUSTOM_FINAL.ipynb",
-  "notebook_root_copy": "/content/MAIA_EXPERIMENT_EXPORTS/v02A_first_cnn_generator_channel_to_2cnn_combined_v7_fullres_20260517_035024/FINETUNIG_DEBUG_CNN_CNN_CUSTOM_FINAL__v02A__20260517_073209.ipynb",
-  "notebook_folder_copy": "/content/MAIA_EXPERIMENT_EXPORTS/v02A_first_cnn_generator_channel_to_2cnn_combined_v7_fullres_20260517_035024/notebooks/FINETUNIG_DEBUG_CNN_CNN_CUSTOM_FINAL__v02A__20260517_073209.ipynb",
-  "notebook_file_name": "FINETUNIG_DEBUG_CNN_CNN_CUSTOM_FINAL__v02A__20260517_073209.ipynb",
-  "sha256": "cabfec922ed81c70a5d3a87247c35a7c2ae127b236e8b08d7c338b986ff10a97"
+  "experiment_name": "FAST_V06",
+  "timestamp": "20260518_094042",
+  "source_notebook_path": "/content/drive/MyDrive/Colab Notebooks/multihead_flexible_stages_combined_v7_FAST_V.06.ipynb",
+  "notebook_root_copy": "/content/MAIA_EXPERIMENT_EXPORTS/v02A_first_cnn_generator_channel_to_2cnn_combined_v7_fullres_20260518_054501/multihead_flexible_stages_combined_v7_FAST_V.06__v02A__20260518_094042.ipynb",
+  "notebook_folder_copy": "/content/MAIA_EXPERIMENT_EXPORTS/v02A_first_cnn_generator_channel_to_2cnn_combined_v7_fullres_20260518_054501/notebooks/multihead_flexible_stages_combined_v7_FAST_V.06__v02A__20260518_094042.ipynb",
+  "notebook_file_name": "multihead_flexible_stages_combined_v7_FAST_V.06__v02A__20260518_094042.ipynb",
+  "sha256": "6d5147c8ed33e92ee67de0953198057c7e640d436cde5d453f9b8c4f3dc43fc4"
 }
