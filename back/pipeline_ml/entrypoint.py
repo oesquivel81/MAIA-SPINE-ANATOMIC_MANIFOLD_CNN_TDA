@@ -12,6 +12,7 @@ from pipeline_ml.logger import PipelineLogger, timed_step
 from pipeline_ml.outputs import EventBridge, LocalOutputWriter, MongoMetricsWriter, S3OutputWriter
 from pipeline_ml.stages import (
     BinaryCurveStage,
+    CurveRefinementStage,
     IngestionStage,
     InferenceStage,
     PersistenceStage,
@@ -67,6 +68,7 @@ class PipelineML:
             IngestionStage(),
             PreprocessingStage(),
             BinaryCurveStage(),
+            CurveRefinementStage(),
             InferenceStage(),
             PostprocessingStage(),
             PersistenceStage(),
