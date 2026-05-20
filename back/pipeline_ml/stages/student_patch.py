@@ -74,11 +74,12 @@ _THRESHOLD: float = 0.5       # umbral para binarizar la salida sigmoid
 
 _HEADS: tuple[str, ...] = ("binary", "boundary", "intervertebral", "ordinal")
 
+# gray_r: probabilidad alta = oscuro (más legible en escala de grises)
 _HEAD_CMAPS: dict[str, str] = {
-    "binary": "hot",
-    "boundary": "coolwarm",
-    "intervertebral": "viridis",
-    "ordinal": "plasma",
+    "binary":         "gray_r",
+    "boundary":       "gray_r",
+    "intervertebral": "gray_r",
+    "ordinal":        "gray_r",
 }
 
 
@@ -322,8 +323,6 @@ class StudentPatchStage(PipelineStage):
         for c, title in enumerate(col_titles):
             axes[0, c].set_title(title, fontsize=8, fontweight="bold")
 
-        cmaps = ["gray"] + [_HEAD_CMAPS[h] for h in _HEADS]
-
         for r, (inp, probs) in enumerate(zip(inputs, all_probs)):
             axes[r, 0].imshow(inp, cmap="gray", vmin=0, vmax=1)
             axes[r, 0].set_ylabel(f"P{r}", fontsize=7)
@@ -332,7 +331,7 @@ class StudentPatchStage(PipelineStage):
             for c, head in enumerate(_HEADS, start=1):
                 prob = probs[head]
                 cov = float(np.mean(prob >= _THRESHOLD)) * 100.0
-                axes[r, c].imshow(prob, cmap=cmaps[c], vmin=0, vmax=1)
+                axes[r, c].imshow(prob, cmap="gray_r", vmin=0, vmax=1)
                 axes[r, c].set_title(f"cov={cov:.1f}%", fontsize=6)
                 axes[r, c].axis("off")
 
@@ -358,11 +357,10 @@ class StudentPatchStage(PipelineStage):
 
         for r, head in enumerate(_HEADS):
             axes[r, 0].set_ylabel(head, fontsize=8, fontweight="bold", rotation=90)
-            cmap = _HEAD_CMAPS[head]
             for c, probs in enumerate(all_probs):
                 prob = probs[head]
                 cov = float(np.mean(prob >= _THRESHOLD)) * 100.0
-                axes[r, c].imshow(prob, cmap=cmap, vmin=0, vmax=1)
+                axes[r, c].imshow(prob, cmap="gray_r", vmin=0, vmax=1)
                 axes[r, c].set_title(f"P{c}\n{cov:.0f}%", fontsize=6)
                 axes[r, c].axis("off")
 
