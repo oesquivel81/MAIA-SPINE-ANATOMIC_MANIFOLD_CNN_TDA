@@ -96,8 +96,156 @@ Tambien existe `run_pipeline_entry(image, full_assets, config_file, request_id)`
 
 - `debug.enabled`: activa/desactiva logs.
 - `debug.verbose`: activa mensajes de debug detallado.
+- `debug.plots_show`: activa grids matplotlib en cada etapa (requiere `%matplotlib inline` en Colab).
 
 ---
+
+## BinaryCurveStage — completado
+
+Stage que conecta `PreprocessingStage` con el CNN `FastBinaryCurveUNet`.
+
+### Entradas del payload
+
+| Clave | Tipo | Descripcion |
+|-------|------|-------------|
+| `image` | `np.ndarray [H,W]` uint8 | Imagen normalizada de `PreprocessingStage` |
+
+### Checkpoint
+
+Se lee de `context.assets.joblib_paths[0]` (primer asset del string `full_assets`).  
+Debe ser un archivo `.pt` o `.pth`. Validaciones aplicadas:
+
+1. **Existencia** del archivo.
+2. **Extension** `.pt/.pth` — si se pasa un `.joblib` se lanza `ValueError` con mensaje explicativo.
+3. **LFS pointer** — si el archivo empieza con `version https://git-lfs...` se lanza `RuntimeError`.
+
+```python
+CNN_CURVE_PT = "/content/.../best_binary_curve_model.pt"
+full_assets = f"PACIENTE|{CNN_CURVE_PT};{STUDENT_JOBLIB};{CLUSTER_JOBLIB}|{R1};{R2}"
+```
+
+### Salidas del payload
+
+| Clave | Tipo | Descripcion |
+|-------|------|-------------|
+| `binary_mask` | `np.ndarray [H,W]` uint8 `{0,1}` | Mascara binaria CNN |
+| `curve_mask` | `np.ndarray [H,W]` uint8 `{0,1}` | Mascara de curva CNN |
+| `binary_mask_path` | str | PNG guardado en `outputs/cnn_curve/binary_mask.png` |
+| `curve_mask_path` | str | PNG guardado en `outputs/cnn_curve/curve_mask.png` |
+| `binary_curve_done` | bool `True` | Bandera para siguiente stage |
+
+### Visualizacion (`plots_show=True`)
+
+- `_show_image(image, title)` — imagen con shape/dtype/stats (mean, std, min, max, p5, p95).
+- `_show_mask(mask, title, cmap)` — mascara con coverage%, pixel counts, valores unicos.
+- `_compare_masks(image, binary_mask, curve_mask)` — grid 1×3 imagen | binaria | curva.
+
+---
+
+## CurveRefinementStage — completado
+
+Stage de post-procesamiento: refina la curva espinal con programacion dinamica (DP) sobre un mapa de likelihood anatomica.
+
+### Entradas del payload
+
+| Clave | Tipo | Descripcion |
+|-------|------|-------------|
+| `image` | `np.ndarray [H,W]` | Imagen normalizada |
+| `binary_mask` | `np.ndarray [H,W]` uint8 `{0,1}` | Mascara binaria de `BinaryCurveStage` |
+| `curve_mask` | `np.ndarray [H,W]` uint8 `{0,1}` | Mascara de curva de `BinaryCurveStage` |
+
+### Algoritmo
+
+```
+1. likelihood imagen  = CLAHE + Scharr gradient  (normalizado 0-1)
+2. banda binaria      = dilate(binary_mask, kernel=45px)
+3. bonus curva        = gaussian_filter(curve_mask, sigma=2)
+4. likelihood_final   = 0.62*img + 0.18*banda + 0.20*bonus  (gaussian sigma=1.2)
+5. curva inicial      = mediana por fila sobre binary_mask  (Gaussian smooth sigma=10)
+6. curva DP           = DP vectorizado sobre offsets (-12..12) maximizando likelihood
+                        con penalizacion de suavidad entre filas consecutivas
+7. heatmap            = curva dibujada con thickness=6, blur_sigma=4  (threshold 0.25)
+```
+
+### Hiperparametros (constantes de modulo)
+
+| Constante | Valor | Descripcion |
+|-----------|-------|-------------|
+| `_DP_SEARCH_RADIUS` | 110 | Ventana horizontal de busqueda por fila |
+| `_DP_SMOOTH_LAMBDA` | 0.22 | Peso penalizacion suavidad |
+| `_DP_PRIOR_LAMBDA` | 0.010 | Peso penalizacion desviacion de curva inicial |
+| `_DP_BINARY_LAMBDA` | 0.08 | Peso bonus distancia a mascara binaria |
+| `_DP_CENTER_LAMBDA` | 0.001 | Peso penalizacion desviacion del centro |
+| `_DP_MAX_STEP` | 12 | Maximo salto en x entre filas consecutivas |
+| `_HEATMAP_THRESHOLD` | 0.25 | Umbral para binarizar dp_heatmap en dp_mask |
+
+### Salidas del payload
+
+| Clave | Tipo | Descripcion |
+|-------|------|-------------|
+| `dp_ys` | `np.ndarray [N]` int32 | Coordenadas Y de la curva refinada |
+| `dp_xs` | `np.ndarray [N]` float32 | Coordenadas X de la curva refinada |
+| `dp_heatmap` | `np.ndarray [H,W]` float32 | Mapa de calor de la curva |
+| `dp_mask` | `np.ndarray [H,W]` uint8 | Mascara binaria de la curva |
+| `curve_csv_path` | str | CSV de puntos `(y, x)` |
+| `curve_meta_path` | str | JSON de metadata e hiperparametros |
+| `curve_refinement_done` | bool `True` | Bandera para siguiente stage |
+
+### Archivos guardados en `outputs/curve_refinement/`
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `01_image_likelihood.png` | Mapa CLAHE+Scharr normalizado |
+| `02_binary_band.png` | Banda dilatada de la mascara binaria |
+| `03_curve_bonus.png` | Bonus de la curva suavizada |
+| `04_likelihood_final.png` | Likelihood final combinada |
+| `05_prior_curve.png` | Heatmap de la curva inicial |
+| `06_curve_dp_heatmap.png` | Heatmap de la curva DP |
+| `07_curve_dp_mask.png` | Mascara binaria de la curva DP |
+| `curve_dp_heatmap.npy` | Heatmap float32 en formato NumPy |
+| `curve_dp_mask.npy` | Mascara uint8 en formato NumPy |
+| `curve_dp_centerline.csv` | Puntos de la curva: columnas `y`, `x` |
+| `curve_refinement_metadata.json` | Hiperparametros, stats y rutas |
+
+### Formato del CSV
+
+```csv
+y,x
+25,166.0
+26,166.0
+27,165.999...
+...
+1006,115.07...
+```
+
+- **`y`** (int): fila del pixel (coordenada vertical, 0 = top).
+- **`x`** (float): columna del pixel (coordenada horizontal, 0 = left).
+- Una fila por cada fila de imagen donde existe curva.
+- N ≈ H (height de la imagen), determinado por la extension vertical de la mascara binaria.
+
+### Visualizacion (`plots_show=True`)
+
+Se generan **tres figuras** en secuencia:
+
+#### 1. `_show_refinement_grid` — grid 2×4  Pipeline completa de likelihood + curvas
+
+| | Col 0 | Col 1 | Col 2 | Col 3 |
+|---|---|---|---|---|
+| **Fila 0** | Imagen normalizada | Binaria refinada | Likelihood imagen (CLAHE+Scharr) | Likelihood final (hot) |
+| **Fila 1** | Curva previa (cyan) | Curva DP (lime) | Overlay heatmap+curva | Comparacion previa vs DP |
+
+#### 2. `_show_curve_heatmap` — grid 2×3  Detalle del heatmap
+
+| | Col 0 | Col 1 | Col 2 |
+|---|---|---|---|
+| **Fila 0** | Heatmap DP (hot) | Mascara DP binaria | Imagen + heatmap overlay |
+| **Fila 1** | Curva previa (cyan) | Curva DP (lime) | Overlay completo (imagen+heatmap+curvas) |
+
+#### 3. `_show_curve_csv` — grid 1×2  Contenido del CSV
+
+- **Panel izquierdo**: scatter de la curva completa (x vs y, colormap viridis, eje Y invertido).
+- **Panel derecho**: tabla matplotlib con `head(8) + ... + tail(8)` del CSV.
+- Tambien imprime en stdout: `describe()`, `head(10)`, `tail(10)` del DataFrame.
 
 ## models/ — Clases identificadas del CNN binario/curva
 
@@ -197,24 +345,11 @@ curve_mask  = (torch.sigmoid(out["curve"])[0, 0].numpy()  >= 0.5).astype("uint8"
 
 ---
 
-## Pendiente — `BinaryCurveStage` (`feature/cnn-binary-stage`)
+## Pendiente — `BinaryCurveStage` ~~(`feature/cnn-binary-stage`)~~ ✅ completado
 
-Stage del pipeline que conecta `PreprocessingStage` con el CNN.
+~~Stage del pipeline que conecta `PreprocessingStage` con el CNN.~~
 
-- [ ] Instanciar `FastBinaryCurveUNet(in_channels=1, base_ch=24)` + cargar checkpoint
-- [ ] Recibir `payload["image"]` normalizado de `PreprocessingStage`
-- [ ] Normalizar a `[0,1]` float y reshape a `[1,1,H,W]`
-- [ ] Inferir con `torch.no_grad()` en CPU o CUDA según disponibilidad
-- [ ] Guardar `binary_mask.png` y `curve_mask.png` en `outputs_dir`
-- [ ] Actualizar payload: `binary_mask`, `curve_mask`, `binary_mask_path`, `curve_mask_path`
-- [ ] Agregar `paths.binary_curve_model_path` a `PipelinePaths` en `config.py`
-- [ ] Agregar visualización con `plots_show` (equivalente a `_compare_images` de preprocessing)
-- `routing.colab_mode`: modo Colab.
-- `routing.instance_mode`: modo instancia.
-- `routing.write_outputs_to_s3`: enviar salidas a S3.
-- `routing.write_metrics_to_mongo`: guardar metricas historicas en Mongo.
-- `routing.publish_events_to_kafka`: publicar progreso a Kafka.
-- `routing.invoke_lambda_for_metrics`: invocar Lambda para procesamiento de metricas/eventos.
+Ver seccion **BinaryCurveStage — completado** arriba.
 
 ## Bitacora de avance
 
@@ -228,10 +363,26 @@ Stage del pipeline que conecta `PreprocessingStage` con el CNN.
 - Ajuste de arquitectura: la inferencia ahora modela explicitamente el pipeline `cnn_curve -> student_manifold_cnn -> clustering`.
 - Se agrego `run_pipeline_main` para invocacion desde Colab con una sola entrada estructurada.
 
+### 2026-05-20
+
+- Implementado `BinaryCurveStage` en `feature/cnn-binary-stage` (mergeado a main via PR #12):
+  - Arquitectura `FastBinaryCurveUNet` corregida (`.net` en lugar de `.block`, `u3/u2/u1` en lugar de `up3/up2/up1`).
+  - Carga checkpoint `.pt` desde `assets.joblib_paths[0]`.
+  - 3 validaciones en `loader.py`: existencia, extension `.pt/.pth`, LFS pointer.
+  - Visualizacion: `_show_image`, `_show_mask`, `_compare_masks` (controladas por `plots_show`).
+- Implementado `CurveRefinementStage` en `feature/curve-refinement-stage`:
+  - DP vectorizado sobre offsets `-12..12` (~25x mas rapido que loop por columna).
+  - Likelihood anatomica: `0.62*CLAHE_Scharr + 0.18*banda_binaria + 0.20*bonus_curva`.
+  - Curva inicial via mediana de filas + Gaussian smooth.
+  - 7 PNGs intermedios + heatmap `.npy` + `curve_dp_centerline.csv` + metadata JSON.
+  - 3 visualizaciones: `_show_refinement_grid` (2x4), `_show_curve_heatmap` (2x3), `_show_curve_csv` (1x2 scatter+tabla).
+- Agregado `debug.plots_show: bool` en `config.py` y propagado al contexto desde `entrypoint.py`.
+- Orden de stages: `Ingestion → Preprocessing → BinaryCurve → CurveRefinement → Inference → Postprocessing → Persistence`.
+
 ## Siguientes pasos sugeridos
 
 1. Conectar `outputs/s3.py` al cliente real de S3 del proyecto.
 2. Conectar `outputs/mongo_metrics.py` al repositorio Mongo existente.
 3. Implementar productor Kafka y dispatcher Lambda reales.
-4. Añadir carga real de joblibs y ejecucion de inferencia.
-5. Crear notebook de prueba en Colab para ejecutar `run_pipeline_entry` con casos de error.
+4. Implementar `InferenceStage` real con carga de joblibs para `student_manifold_cnn` y `clustering`.
+5. Crear notebook de prueba en Colab para ejecutar todo el pipeline con imagen real y `plots_show=True`.
