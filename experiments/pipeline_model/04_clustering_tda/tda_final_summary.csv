@@ -1,0 +1,5 @@
+label,best_tda_combo,best_tda_silhouette,n_samples,n_groups
+vertebra_type,clinical_cobb__local_context_all_r3__scaler_minmax,0.0,51,7
+region_affection_type,clinical_cobb__local_context_all_r3__scaler_minmax,0.0,51,4
+curve_zone,clinical_cobb__local_context_all_r3__scaler_minmax,0.0,51,4
+assigned_cluster,clinical_cobb__local_context_all_r3__scaler_minmax,0.0,51,5

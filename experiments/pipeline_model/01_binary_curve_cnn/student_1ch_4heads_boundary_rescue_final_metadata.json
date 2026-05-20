@@ -1,0 +1,24 @@
+{
+  "final_name": "student_1ch_4heads_boundary_rescue_final",
+  "source_run_name": "boundary_rescue_after_auto_balance_01",
+  "source_best_checkpoint": "/content/V3_RX_NORMALIZED_BINARY_CURVE_STUDENT_PATCHES/06_student_patch_cnn_1ch_4heads_from_teacher/finetune_boundary_rescue_after_auto_balance_01/best_boundary_rescue_after_auto_balance_01.pt",
+  "source_last_checkpoint": "/content/V3_RX_NORMALIZED_BINARY_CURVE_STUDENT_PATCHES/06_student_patch_cnn_1ch_4heads_from_teacher/finetune_boundary_rescue_after_auto_balance_01/last_boundary_rescue_after_auto_balance_01.pt",
+  "source_history": "/content/V3_RX_NORMALIZED_BINARY_CURVE_STUDENT_PATCHES/06_student_patch_cnn_1ch_4heads_from_teacher/finetune_boundary_rescue_after_auto_balance_01/history_boundary_rescue_after_auto_balance_01.csv",
+  "saved_final_checkpoint": "/content/V3_RX_NORMALIZED_BINARY_CURVE_STUDENT_PATCHES/06_student_patch_cnn_1ch_4heads_from_teacher/FINAL_CHECKPOINTS/student_1ch_4heads_boundary_rescue_final.pt",
+  "epoch": 22,
+  "best_val": 6.1460254192352295,
+  "val_loss": 6.1460254192352295,
+  "stage": "boundary_inter_balance",
+  "finetune_focus": "boundary_rescue_after_auto_balance",
+  "img_size": 224,
+  "model_name": "StudentUNet1CH4Heads",
+  "base": 16,
+  "dropout": 0.05,
+  "input_channels": 1,
+  "outputs": [
+    "binary",
+    "boundary",
+    "intervertebral",
+    "ordinal"
+  ]
+}

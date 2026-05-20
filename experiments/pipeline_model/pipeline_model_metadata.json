@@ -1,0 +1,12 @@
+{
+  "created_at": "2026-05-19T18:33:54.938645",
+  "repo_root": "/content/MAIA-SPINE-ANATOMIC_MANIFOLD_CNN_TDA",
+  "experiment_dir": "/content/MAIA-SPINE-ANATOMIC_MANIFOLD_CNN_TDA/experiments/v02A",
+  "backup_root": "/content/drive/MyDrive/TDA_PIPELINE/FINAL_BACKUPS/MAIA_BACKEND_CONCENTRATED_20260518_223710",
+  "pipeline_model_dir": "/content/MAIA-SPINE-ANATOMIC_MANIFOLD_CNN_TDA/experiments/v02A/pipeline_model",
+  "n_copied": 23,
+  "n_missing": 0,
+  "n_errors": 0,
+  "manifest_csv": "/content/MAIA-SPINE-ANATOMIC_MANIFOLD_CNN_TDA/experiments/v02A/pipeline_model/pipeline_model_manifest.csv",
+  "summary_csv": "/content/MAIA-SPINE-ANATOMIC_MANIFOLD_CNN_TDA/experiments/v02A/pipeline_model/pipeline_model_summary.csv"
+}

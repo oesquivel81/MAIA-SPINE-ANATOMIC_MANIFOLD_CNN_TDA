@@ -1,0 +1,43 @@
+{
+  "created_at": "2026-05-20T01:03:51.025299",
+  "pipeline_model_dir": "/content/MAIA-SPINE-ANATOMIC_MANIFOLD_CNN_TDA/experiments/v02A/pipeline_model",
+  "n_total_files": 27,
+  "total_mb": 178.51178741455078,
+  "n_joblibs": 5,
+  "ok_dirs": true,
+  "ok_expected_models": true,
+  "ok_no_bad_files": true,
+  "ok_joblibs_load": true,
+  "final_status": "PASS",
+  "expected_model_schema": {
+    "01_binary_curve_cnn": {
+      "input_channels": 1,
+      "outputs": [
+        "binary",
+        "curve"
+      ]
+    },
+    "02_student_1ch_4heads": {
+      "input_channels": 1,
+      "outputs": [
+        "binary",
+        "boundary",
+        "intervertebral",
+        "ordinal"
+      ]
+    },
+    "03_cnn_10ch_multitask": {
+      "input_channels": 10,
+      "outputs": [
+        "multiclass",
+        "binary",
+        "boundary",
+        "intervertebral",
+        "ordinal"
+      ]
+    },
+    "04_clustering_tda": {
+      "type": "clustering/TDA joblib artifacts"
+    }
+  }
+}
