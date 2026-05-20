@@ -10,6 +10,8 @@ from app.repositories.file_metadata_repository import FileMetadataRepository
 from app.services.file_service import FileService
 from app.services.normalization_profile_loader import NormalizationProfileLoader
 from app.services.normalization_service import NormalizationService
+from pipeline_ml.normalization_stage.dynamic_engine import DynamicNormalizationEngine
+from pipeline_ml.normalization_stage.traceability import NormalizationTraceabilityService
 from app.services.patient_service import PatientService
 
 
@@ -39,7 +41,17 @@ class Container:
         )
 
     def normalization_service(self) -> NormalizationService:
-        return NormalizationService(profile_loader=self.normalization_profile_loader())
+        return NormalizationService(
+            profile_loader=self.normalization_profile_loader(),
+            settings=self.settings,
+            dynamic_engine=DynamicNormalizationEngine(),
+            traceability_service=NormalizationTraceabilityService(
+                settings=self.settings,
+                redis_component=self.redis,
+                mongo_component=self.mongo,
+                s3_component=self.s3,
+            ),
+        )
 
     def patient_service(self) -> PatientService:
         return PatientService(

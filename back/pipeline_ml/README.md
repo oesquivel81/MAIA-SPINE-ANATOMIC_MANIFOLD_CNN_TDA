@@ -44,7 +44,24 @@ pipeline_ml/
     s3.py
     mongo_metrics.py
     events.py
+  normalization_stage/
+    logger.py
+    dynamic_engine.py
+    traceability.py
 ```
+
+## Normalization Stage (nuevo)
+
+Se centralizo la logica de normalizacion agregada recientemente en:
+
+- `pipeline_ml/normalization_stage/logger.py`
+- `pipeline_ml/normalization_stage/dynamic_engine.py`
+- `pipeline_ml/normalization_stage/traceability.py`
+
+Objetivo:
+
+- Mantener la logica de normalizacion agrupada en `pipeline_ml`.
+- Unificar trazabilidad y logging de inicio de metodos.
 
 ## Metodo principal para Colab (una sola entrada)
 
