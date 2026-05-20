@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,9 @@ from pipeline_ml.logger import PipelineLogger
 from pipeline_ml.normalization_stage.dynamic_engine import DynamicNormalizationEngine
 from pipeline_ml.stages.base import PipelineStage
 from pipeline_ml.utils.stage_report import StageReport
+
+# Clave Redis para traces de normalización aplicados
+_REDIS_KEY_PREFIX = "normalization_applied"
 
 
 class PreprocessingStage(PipelineStage):
@@ -51,45 +55,145 @@ class PreprocessingStage(PipelineStage):
         output_stats = self._compute_stats(normalized)
         logger.debug(f"Preprocessing: stats salida → mean={output_stats['mean']:.2f}, std={output_stats['std']:.2f}")
 
-        # --- 5. Guardar imagen normalizada ---
+        # --- 5. Guardar imagen normalizada en outputs_dir ---
         normalized_image_path = context.outputs_dir / "normalized_image.png"
         cv2.imwrite(str(normalized_image_path), normalized)
         logger.info(f"Preprocessing: imagen normalizada guardada en {normalized_image_path}")
 
-        # --- 6. Construir trace JSON (formato N_1_normalization_profile.json) ---
+        # --- 6. Construir trace JSON (formato exacto N_1_normalization_profile.json) ---
         resize_meta = norm_ctx.runtime_metadata.get("1-resize-image", {})
-        trace = {
-            "normalization_mode": closest_profile.get("normalization_mode"),
-            "normalization_p_low": closest_profile.get("normalization_p_low"),
-            "normalization_p_high": closest_profile.get("normalization_p_high"),
-            "target_long_side": closest_profile.get("target_long_side"),
-            "standardize_long_side": bool(closest_profile.get("target_long_side")),
-            "original_shape": resize_meta.get("original_shape"),
-            "resized_shape": resize_meta.get("resized_shape"),
-            "final_image_shape": [int(normalized.shape[0]), int(normalized.shape[1])],
-            "scale_x": resize_meta.get("scale_x"),
-            "scale_y": resize_meta.get("scale_y"),
-            "closest_profile_key": str(closest_profile.get("patient_key", "unknown")),
-            "closest_profile_distance": float(distance),
-            "image_before_norm_stats": {k: v for k, v in input_stats.items() if k != "aspect_ratio"},
-            "image_after_norm_stats": {k: v for k, v in output_stats.items() if k != "aspect_ratio"},
-        }
+        patient_id = context.assets.full_name or context.request_id
+        trace = self._build_trace(
+            patient_id=patient_id,
+            request_id=context.request_id,
+            closest_profile=closest_profile,
+            distance=distance,
+            resize_meta=resize_meta,
+            normalized=normalized,
+            input_stats=input_stats,
+            output_stats=output_stats,
+        )
 
+        # --- 7a. Guardar trace en outputs_dir (artefacto de pipeline) ---
         trace_json_path = context.outputs_dir / "normalization_trace.json"
-        trace_json_path.write_text(json.dumps(trace, indent=2), encoding="utf-8")
-        logger.info(f"Preprocessing: trace JSON guardado en {trace_json_path}")
+        trace_json_path.write_text(json.dumps(trace, indent=4), encoding="utf-8")
+        logger.info(f"Preprocessing: trace pipeline guardado en {trace_json_path}")
 
-        # --- 7. Actualizar payload ---
+        # --- 7b. Guardar trace en patient_json_profiles_dir (referencia persistente) ---
+        profile_path = self._save_profile_reference(trace, context, logger)
+
+        # --- 7c. Backup en Redis (best-effort) ---
+        self._save_to_redis(trace, patient_id, context.request_id, context, logger)
+
+        # --- 8. Actualizar payload ---
         payload["image"] = normalized
         payload["normalized_image_path"] = str(normalized_image_path)
         payload["normalization_trace"] = trace
         payload["normalization_trace_path"] = str(trace_json_path)
+        payload["normalization_profile_path"] = str(profile_path) if profile_path else None
         payload["preprocessed"] = True
 
         return payload
 
     # ------------------------------------------------------------------
-    # Helpers
+    # Construcción del trace (formato N_1_normalization_profile.json)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _build_trace(
+        patient_id: str,
+        request_id: str,
+        closest_profile: dict,
+        distance: float,
+        resize_meta: dict,
+        normalized: np.ndarray,
+        input_stats: dict[str, float],
+        output_stats: dict[str, float],
+    ) -> dict:
+        return {
+            # Identificación del paciente / request
+            "patient_id": patient_id,
+            "request_id": request_id,
+            # Perfil de normalización aplicado
+            "normalization_mode": closest_profile.get("normalization_mode"),
+            "normalization_p_low": closest_profile.get("normalization_p_low"),
+            "normalization_p_high": closest_profile.get("normalization_p_high"),
+            "normalization_mask_source": closest_profile.get("normalization_mask_source", ""),
+            # Geometría de la imagen
+            "original_shape": resize_meta.get("original_shape"),
+            "resized_shape": resize_meta.get("resized_shape"),
+            "final_image_shape": [int(normalized.shape[0]), int(normalized.shape[1])],
+            "standardize_long_side": bool(closest_profile.get("target_long_side")),
+            "target_long_side": closest_profile.get("target_long_side"),
+            "scale_x": resize_meta.get("scale_x"),
+            "scale_y": resize_meta.get("scale_y"),
+            # Referencia al perfil origen
+            "processed_mask_path": closest_profile.get("processed_mask_path", ""),
+            # Estadísticas de intensidad
+            "image_before_norm_stats": {k: v for k, v in input_stats.items() if k != "aspect_ratio"},
+            "image_after_norm_stats": {k: v for k, v in output_stats.items() if k != "aspect_ratio"},
+            # Metadatos de selección (no en N_1 pero útiles para trazabilidad)
+            "closest_profile_key": str(closest_profile.get("patient_key", "unknown")),
+            "closest_profile_distance": float(distance),
+        }
+
+    # ------------------------------------------------------------------
+    # Guardado en patient_json_profiles_dir
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _save_profile_reference(
+        trace: dict,
+        context: PipelineContext,
+        logger: PipelineLogger,
+    ) -> Path | None:
+        raw_dir: str = context.metadata.get(
+            "patient_json_profiles_dir",
+            "resources/NORMALIZATION_PROFILES/patient_json_profiles",
+        )
+        profiles_dir = Path(raw_dir)
+        if not profiles_dir.is_absolute():
+            profiles_dir = Path.cwd() / profiles_dir
+        try:
+            profiles_dir.mkdir(parents=True, exist_ok=True)
+            safe_name = re.sub(r"[^\w\-]", "_", trace.get("patient_id", "unknown"))
+            filename = f"{safe_name}_{context.request_id}_normalization_profile.json"
+            dest = profiles_dir / filename
+            dest.write_text(json.dumps(trace, indent=4), encoding="utf-8")
+            logger.info(f"Preprocessing: perfil de referencia guardado en {dest}")
+            return dest
+        except Exception as exc:
+            logger.warning(f"Preprocessing: no se pudo guardar en patient_json_profiles_dir: {exc}")
+            return None
+
+    # ------------------------------------------------------------------
+    # Backup Redis (best-effort)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _save_to_redis(
+        trace: dict,
+        patient_id: str,
+        request_id: str,
+        context: PipelineContext,
+        logger: PipelineLogger,
+    ) -> None:
+        redis_url: str = context.metadata.get("redis_url", "")
+        if not redis_url:
+            return
+        try:
+            import redis as redis_lib  # sincrónico (redis==5.x)
+            client = redis_lib.from_url(redis_url, decode_responses=True, socket_connect_timeout=2)
+            safe_patient = re.sub(r"[^\w\-]", "_", patient_id)
+            key = f"{_REDIS_KEY_PREFIX}:{safe_patient}:{request_id}"
+            client.set(key, json.dumps(trace), ex=60 * 60 * 24 * 7)  # TTL 7 días
+            client.close()
+            logger.info(f"Preprocessing: trace guardado en Redis key={key}")
+        except Exception as exc:
+            logger.warning(f"Preprocessing: backup Redis no disponible — {exc}")
+
+    # ------------------------------------------------------------------
+    # Carga de perfiles JSONL
     # ------------------------------------------------------------------
 
     @staticmethod
@@ -127,6 +231,10 @@ class PreprocessingStage(PipelineStage):
             "Configura paths.normalization_profile_jsonl en PipelineConfig o inclúyelo en resource_paths."
         )
 
+    # ------------------------------------------------------------------
+    # Estadísticas de imagen
+    # ------------------------------------------------------------------
+
     @staticmethod
     def _compute_stats(image: np.ndarray) -> dict[str, float]:
         img = image.astype(np.float32)
@@ -144,8 +252,10 @@ class PreprocessingStage(PipelineStage):
         }
 
     def describe_output(self, payload: dict[str, Any]) -> StageReport:
-        """Campos esperados tras preprocessing."""
         report = StageReport(stage_name=self.name)
-        for key in ("image", "ingested", "preprocessed", "normalized_image_path", "normalization_trace_path"):
+        for key in (
+            "image", "ingested", "preprocessed",
+            "normalized_image_path", "normalization_trace_path", "normalization_profile_path",
+        ):
             report.add(key, payload.get(key, "<ausente>"))
         return report

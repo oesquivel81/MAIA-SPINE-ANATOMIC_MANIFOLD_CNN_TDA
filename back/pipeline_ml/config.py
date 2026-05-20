@@ -36,6 +36,14 @@ class PipelinePaths:
     # Si está vacío, se busca automáticamente en cwd/resources/NORMALIZATION_PROFILES/
     normalization_profile_jsonl: str = ""
 
+    # Directorio donde se guardan los traces de normalización aplicados (formato N_1_normalization_profile.json)
+    # Ruta relativa se resuelve desde cwd (en Colab: /content/resources/NORMALIZATION_PROFILES/patient_json_profiles)
+    patient_json_profiles_dir: str = "resources/NORMALIZATION_PROFILES/patient_json_profiles"
+
+    # URL de Redis para backup del trace (opcional, best-effort)
+    # Ejemplo: redis://localhost:6379/0
+    redis_url: str = ""
+
     s3_bucket: str = ""
     s3_prefix: str = "pipeline-ml"
 
