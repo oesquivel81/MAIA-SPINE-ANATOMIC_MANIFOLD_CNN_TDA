@@ -56,6 +56,22 @@ class PreprocessingStage(PipelineStage):
         output_stats = self._compute_stats(normalized)
         logger.debug(f"Preprocessing: stats salida → mean={output_stats['mean']:.2f}, std={output_stats['std']:.2f}")
 
+        # --- 4b. Visualización (solo si plots_show=True) ---
+        if context.metadata.get("plots_show", False):
+            self._show_image(
+                image=image,
+                title="Imagen de entrada (pre-normalización)",
+                stats=input_stats,
+            )
+            self._compare_images(
+                original=image,
+                normalized=normalized,
+                input_stats=input_stats,
+                output_stats=output_stats,
+                profile_key=str(closest_profile.get("patient_key", "?")),
+                distance=distance,
+            )
+
         # --- 5. Guardar imagen normalizada en outputs_dir ---
         normalized_image_path = context.outputs_dir / "normalized_image.png"
         cv2.imwrite(str(normalized_image_path), normalized)
@@ -276,6 +292,81 @@ class PreprocessingStage(PipelineStage):
             "p99": float(np.percentile(img, 99)),
             "aspect_ratio": float(img.shape[0] / max(img.shape[1], 1)),
         }
+
+    # ------------------------------------------------------------------
+    # Visualización (debug — activar con debug.plots_show=True)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _show_image(
+        image: np.ndarray,
+        title: str = "Imagen",
+        stats: dict[str, float] | None = None,
+    ) -> None:
+        """Muestra una única imagen en escala de grises con sus estadísticas."""
+        import matplotlib.pyplot as plt
+
+        fig, ax = plt.subplots(figsize=(5, 9))
+        ax.imshow(image, cmap="gray", vmin=0, vmax=255)
+        ax.axis("off")
+
+        subtitle = f"shape={image.shape}  dtype={image.dtype}"
+        if stats:
+            subtitle += (
+                f"\nmean={stats['mean']:.2f}  std={stats['std']:.2f}"
+                f"\nmin={stats['min']:.1f}  max={stats['max']:.1f}"
+                f"\np5={stats['p5']:.1f}  p95={stats['p95']:.1f}"
+            )
+        ax.set_title(f"{title}\n{subtitle}", fontsize=9, pad=8)
+        fig.tight_layout()
+        plt.show()
+
+    @staticmethod
+    def _compare_images(
+        original: np.ndarray,
+        normalized: np.ndarray,
+        input_stats: dict[str, float],
+        output_stats: dict[str, float],
+        profile_key: str = "",
+        distance: float = 0.0,
+    ) -> None:
+        """Grid 1×2: imagen original vs normalizada con sus estadísticas."""
+        import matplotlib.pyplot as plt
+
+        def _stats_text(img: np.ndarray, stats: dict[str, float]) -> str:
+            return (
+                f"shape={img.shape}  dtype={img.dtype}\n"
+                f"mean={stats['mean']:.2f}  std={stats['std']:.2f}\n"
+                f"min={stats['min']:.1f}  max={stats['max']:.1f}\n"
+                f"p1={stats['p1']:.1f}  p5={stats['p5']:.1f}  "
+                f"p95={stats['p95']:.1f}  p99={stats['p99']:.1f}"
+            )
+
+        fig, axes = plt.subplots(1, 2, figsize=(14, 9))
+
+        axes[0].imshow(original, cmap="gray", vmin=0, vmax=255)
+        axes[0].set_title(
+            f"ENTRADA (original)\n{_stats_text(original, input_stats)}",
+            fontsize=8.5,
+            pad=8,
+        )
+        axes[0].axis("off")
+
+        axes[1].imshow(normalized, cmap="gray", vmin=0, vmax=255)
+        axes[1].set_title(
+            f"SALIDA (normalizada)\n{_stats_text(normalized, output_stats)}",
+            fontsize=8.5,
+            pad=8,
+        )
+        axes[1].axis("off")
+
+        fig.suptitle(
+            f"Perfil aplicado: {profile_key}  │  distancia: {distance:.6f}",
+            fontsize=10,
+            y=1.01,
+        )
+        fig.tight_layout()
+        plt.show()
 
     def describe_output(self, payload: dict[str, Any]) -> StageReport:
         report = StageReport(stage_name=self.name)
