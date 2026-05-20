@@ -60,8 +60,13 @@ class BinaryCurveStage(PipelineStage):
         if image is None:
             raise ValueError("BinaryCurveStage: no hay imagen en el payload. Ejecuta PreprocessingStage primero.")
 
-        # Ruta del checkpoint: context.metadata
-        checkpoint_path = context.metadata.get("binary_curve_model_path", "").strip()
+        # Ruta del checkpoint: prioridad 1 → assets.joblib_paths[0] (pasado en full_assets)
+        #                       prioridad 2 → config binary_curve_model_path
+        checkpoint_path = ""
+        if context.assets.joblib_paths:
+            checkpoint_path = context.assets.joblib_paths[0].strip()
+        if not checkpoint_path:
+            checkpoint_path = context.metadata.get("binary_curve_model_path", "").strip()
 
         # Intentar resolver la ruta si no existe tal cual
         if checkpoint_path:
@@ -70,8 +75,9 @@ class BinaryCurveStage(PipelineStage):
         # Si sigue vacía o no existe, saltar el stage sin explotar el pipeline
         if not checkpoint_path:
             logger.warn(
-                "BinaryCurveStage: 'binary_curve_model_path' no configurado. "
-                "Agrega la ruta al checkpoint en paths.binary_curve_model_path del config JSON. "
+                "BinaryCurveStage: no se encontró ruta del checkpoint. "
+                "Pasa la ruta del .pt como primer elemento de full_assets "
+                "o configura paths.binary_curve_model_path en el config JSON. "
                 "Stage saltado."
             )
             payload["binary_curve_skipped"] = True
