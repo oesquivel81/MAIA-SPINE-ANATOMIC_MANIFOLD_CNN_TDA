@@ -1,8 +1,19 @@
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 from pathlib import Path
 import json
+
+
+def _from_dict(cls, data: dict):
+    """Construye un dataclass filtrando claves desconocidas del dict.
+
+    Permite que un config.json tenga campos nuevos o antiguos sin romper
+    versiones del codigo que aun no los definen.
+    """
+    valid = {f.name for f in dataclasses.fields(cls)}
+    return cls(**{k: v for k, v in data.items() if k in valid})
 
 
 @dataclass
@@ -42,6 +53,10 @@ class PipelinePaths:
     # Ruta relativa se resuelve desde cwd (en Colab: /content/resources/NORMALIZATION_PROFILES/patient_json_profiles)
     patient_json_profiles_dir: str = "resources/NORMALIZATION_PROFILES/patient_json_profiles"
 
+    # Ruta al checkpoint del CNN binario/curva (FastBinaryCurveUNet).
+    # Ejemplo: /content/experiments/pipeline_model/01_binary_curve_cnn/best_binary_curve_model.pt
+    binary_curve_model_path: str = ""
+
     # URL de Redis para backup del trace (opcional, best-effort)
     # Ejemplo: redis://localhost:6379/0
     redis_url: str = ""
@@ -73,8 +88,8 @@ class PipelineConfig:
 
         data = json.loads(path.read_text(encoding="utf-8"))
 
-        debug = DebugFlags(**data.get("debug", {}))
-        routing = RoutingFlags(**data.get("routing", {}))
-        paths_cfg = PipelinePaths(**data.get("paths", {}))
+        debug = _from_dict(DebugFlags, data.get("debug", {}))
+        routing = _from_dict(RoutingFlags, data.get("routing", {}))
+        paths_cfg = _from_dict(PipelinePaths, data.get("paths", {}))
 
         return cls(debug=debug, routing=routing, paths=paths_cfg)
