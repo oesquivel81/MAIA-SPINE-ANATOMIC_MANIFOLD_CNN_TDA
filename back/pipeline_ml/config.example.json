@@ -1,0 +1,30 @@
+{
+  "debug": {
+    "enabled": true,
+    "verbose": true,
+    "print_step_summary": true,
+    "save_debug_artifacts": false
+  },
+  "routing": {
+    "colab_mode": true,
+    "instance_mode": false,
+    "write_local_artifacts": true,
+    "write_outputs_to_s3": false,
+    "write_metrics_to_mongo": false,
+    "publish_events_to_kafka": false,
+    "invoke_lambda_for_metrics": false
+  },
+  "paths": {
+    "workspace_root": "./",
+    "local_artifacts_dir": "./pipeline_ml_artifacts",
+    "output_subdir": "outputs",
+    "metrics_subdir": "metrics",
+    "temp_subdir": "tmp",
+    "s3_bucket": "",
+    "s3_prefix": "pipeline-ml",
+    "mongo_database": "maia",
+    "mongo_collection": "pipeline_metrics",
+    "kafka_topic": "pipeline-progress",
+    "lambda_function_name": ""
+  }
+}
