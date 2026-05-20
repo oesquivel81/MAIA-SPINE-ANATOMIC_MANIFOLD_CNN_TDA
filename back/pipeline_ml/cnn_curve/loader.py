@@ -40,6 +40,14 @@ def load_binary_curve_model(
     if not path.exists():
         raise FileNotFoundError(f"Checkpoint no encontrado: {path}")
 
+    # Validar extensión — solo se acepta .pt / .pth
+    if path.suffix.lower() not in {".pt", ".pth"}:
+        raise ValueError(
+            f"Se esperaba un archivo PyTorch (.pt / .pth) pero se recibió '{path.name}'.\n"
+            f"Si estás pasando la ruta en full_assets, asegúrate de usar CNN_CURVE_PT "
+            f"(no CNN_CURVE_JOBLIB) en la cadena full_assets."
+        )
+
     # Detectar puntero Git LFS (empieza con "version https://git-lfs")
     header = path.read_bytes()[:27]
     if header.startswith(b"version https://git-lfs"):
