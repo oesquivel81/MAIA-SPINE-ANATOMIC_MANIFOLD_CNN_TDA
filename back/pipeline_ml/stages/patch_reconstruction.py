@@ -371,6 +371,63 @@ class PatchReconstructionStage(PipelineStage):
         return rows
 
     # ------------------------------------------------------------------
+    # Perfil vertical
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _profile_from_maps(
+        boundary: np.ndarray,
+        inter: np.ndarray,
+        binary: np.ndarray | None = None,
+    ) -> dict[str, np.ndarray]:
+        """
+        Perfil vertical de las señales estructurales proyectando sobre el eje de filas.
+
+        Parameters
+        ----------
+        boundary : float32 [H, W]  mapa de bordes vertebrales reconstruido.
+        inter    : float32 [H, W]  mapa intervertebral reconstruido.
+        binary   : float32 [H, W]  máscara anatómica (opcional). Si se omite se
+                                   asume cobertura total.
+
+        Returns
+        -------
+        dict con:
+            "boundary_profile"  float32 [H]  perfil vertical normalizado [0,1]
+            "inter_profile"     float32 [H]  perfil vertical normalizado [0,1]
+            "combined_profile"  float32 [H]  perfil vertical normalizado [0,1]
+            "combined_map"      float32 [H,W] mapa combinado ponderado, clipeado [0,1]
+        """
+        if binary is None:
+            binary = np.ones_like(boundary, dtype=np.float32)
+
+        support = (np.clip(binary, 0.0, 1.0) > 0.30).astype(np.float32)
+
+        boundary_w = boundary * support
+        inter_w    = inter    * support
+
+        boundary_profile = boundary_w.mean(axis=1)
+        inter_profile    = inter_w.mean(axis=1)
+
+        # intervertebral pesa más: marca gaps/espacios entre vértebras
+        combined = np.clip(0.55 * boundary_w + 0.85 * inter_w, 0.0, 1.0)
+        combined_profile = combined.mean(axis=1)
+
+        def _norm01(v: np.ndarray) -> np.ndarray:
+            v = np.asarray(v, dtype=np.float32)
+            vmin, vmax = v.min(), v.max()
+            if vmax > vmin:
+                return (v - vmin) / (vmax - vmin + 1e-8)
+            return np.zeros_like(v)
+
+        return {
+            "boundary_profile": _norm01(boundary_profile),
+            "inter_profile":    _norm01(inter_profile),
+            "combined_profile": _norm01(combined_profile),
+            "combined_map":     combined,
+        }
+
+    # ------------------------------------------------------------------
     # Visualización
     # ------------------------------------------------------------------
 
