@@ -32,6 +32,10 @@ class PipelinePaths:
     metrics_subdir: str = "metrics"
     temp_subdir: str = "tmp"
 
+    # Ruta al archivo JSONL de perfiles de normalización.
+    # Si está vacío, se busca automáticamente en cwd/resources/NORMALIZATION_PROFILES/
+    normalization_profile_jsonl: str = ""
+
     s3_bucket: str = ""
     s3_prefix: str = "pipeline-ml"
 

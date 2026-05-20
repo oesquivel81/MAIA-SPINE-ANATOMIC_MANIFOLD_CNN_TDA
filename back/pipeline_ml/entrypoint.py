@@ -79,6 +79,7 @@ class PipelineML:
         work_dir.mkdir(parents=True, exist_ok=True)
 
         context = PipelineContext.now(request_id=req_id, assets=assets, work_dir=work_dir)
+        context.metadata["normalization_profile_jsonl"] = self.config.paths.normalization_profile_jsonl
 
         payload: dict[str, Any] = {"image": image, "request_id": req_id}
 
