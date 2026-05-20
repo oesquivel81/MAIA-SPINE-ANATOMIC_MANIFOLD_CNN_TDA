@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     normalization_debug_save_json: bool = True
     normalization_traceability_enabled: bool = True
     normalization_traceability_output_dir: str = "normalization_traceability"
-    normalization_trace_visualization_enabled: bool = True
+    normalization_trace_plots_enabled: bool = True  # bandera global: controla todos los plots de trazabilidad
     normalization_trace_redis_enabled: bool = False
     normalization_trace_mongo_enabled: bool = False
     normalization_trace_route_b_enabled: bool = True
