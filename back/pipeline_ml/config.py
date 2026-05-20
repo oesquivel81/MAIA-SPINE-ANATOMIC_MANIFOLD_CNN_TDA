@@ -11,6 +11,8 @@ class DebugFlags:
     verbose: bool = True
     print_step_summary: bool = True
     save_debug_artifacts: bool = False
+    # Mostrar visualizaciones matplotlib inline (Colab/Jupyter). False en produccion.
+    plots_show: bool = False
 
 
 @dataclass
