@@ -201,24 +201,33 @@ class PreprocessingStage(PipelineStage):
         """Localiza y carga el JSONL de perfiles de normalización.
 
         Orden de búsqueda:
-        1. context.metadata["normalization_profile_jsonl"] (configurable via PipelinePaths)
-        2. resource_paths del AssetBundle que terminen en .jsonl
-        3. Fallback: cwd / resources / NORMALIZATION_PROFILES / normalization_profile_index.jsonl
+        1. context.metadata["normalization_profile_jsonl"] (override explícito vía PipelinePaths)
+        2. resource_paths del AssetBundle que terminen en .jsonl (pasado por el usuario)
+        3. Ruta relativa al paquete: back/resources/NORMALIZATION_PROFILES/ (siempre disponible si el repo está clonado)
+        4. Redis: normalization_profiles:index:v1 (si redis_url está configurado)
         """
         candidates: list[Path] = []
 
+        # --- 1. override explícito ---
         configured: str = context.metadata.get("normalization_profile_jsonl", "")
         if configured:
             candidates.append(Path(configured))
 
+        # --- 2. resource_paths del usuario ---
         for rp in context.assets.resource_paths:
             p = Path(rp)
             if p.suffix == ".jsonl":
                 candidates.append(p)
 
-        candidates.append(
-            Path.cwd() / "resources" / "NORMALIZATION_PROFILES" / "normalization_profile_index.jsonl"
+        # --- 3. Ruta relativa al paquete (canónica) ---
+        # preprocessing.py está en back/pipeline_ml/stages/  →  parents[2] = back/
+        _package_jsonl = (
+            Path(__file__).resolve().parents[2]
+            / "resources"
+            / "NORMALIZATION_PROFILES"
+            / "normalization_profile_index.jsonl"
         )
+        candidates.append(_package_jsonl)
 
         for candidate in candidates:
             if candidate.exists():
@@ -226,9 +235,25 @@ class PreprocessingStage(PipelineStage):
                 lines = candidate.read_text(encoding="utf-8").splitlines()
                 return [json.loads(line) for line in lines if line.strip()]
 
+        # --- 4. Redis fallback ---
+        redis_url: str = context.metadata.get("redis_url", "")
+        if redis_url:
+            try:
+                import redis as redis_lib
+                client = redis_lib.from_url(redis_url, decode_responses=True, socket_connect_timeout=2)
+                raw = client.get("normalization_profiles:index:v1")
+                client.close()
+                if raw:
+                    logger.info("Preprocessing: leyendo perfiles desde Redis (normalization_profiles:index:v1)")
+                    return json.loads(raw)
+            except Exception as exc:
+                logger.warning(f"Preprocessing: Redis no disponible — {exc}")
+
         raise FileNotFoundError(
-            "PreprocessingStage: no se encontró el archivo JSONL de perfiles de normalización. "
-            "Configura paths.normalization_profile_jsonl en PipelineConfig o inclúyelo en resource_paths."
+            f"PreprocessingStage: no se encontró normalization_profile_index.jsonl.\n"
+            f"  Ruta canónica buscada: {_package_jsonl}\n"
+            f"  Asegúrate de que el repo está correctamente clonado o configura "
+            f"paths.normalization_profile_jsonl en config.json."
         )
 
     # ------------------------------------------------------------------
