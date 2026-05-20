@@ -265,14 +265,34 @@ class NormalizationService:
                 visualization_image=visualization_image,
                 generate_visualization=should_generate_visualization,
             )
-            response_payload["traceability"] = trace_info
-
-        return response_payload
-
-    async def _get_profiles(self, profile_source: str) -> list[dict[str, Any]]:
-        log_method_start(logger, self.__class__.__name__, "_get_profiles", profile_source=profile_source)
-        try:
-            return await self._profile_loader.get_profiles(profile_source)
+            # Extraer metadata del paso de resize (shape, scale) del runtime context
+            _resize_meta = context.runtime_metadata.get("1-resize-image", {})
+            _profile_summary = response_payload["closest_profile_summary"]
+            trace_payload = {
+                # --- identificación del perfil aplicado ---
+                "profile_source": selected_profile_source,
+                "closest_profile_key": str(closest_profile.get("patient_key", "unknown")),
+                "closest_profile_distance": float(distance),
+                # --- parámetros de normalización (formato perfil de referencia) ---
+                "normalization_mode": _profile_summary.get("normalization_mode"),
+                "normalization_p_low": _profile_summary.get("normalization_p_low"),
+                "normalization_p_high": _profile_summary.get("normalization_p_high"),
+                "target_long_side": _profile_summary.get("target_long_side"),
+                "standardize_long_side": bool(_profile_summary.get("target_long_side")),
+                # --- shapes y escala del resize ---
+                "original_shape": _resize_meta.get("original_shape"),
+                "resized_shape": _resize_meta.get("resized_shape"),
+                "final_image_shape": [int(normalized.shape[0]), int(normalized.shape[1])],
+                "scale_x": _resize_meta.get("scale_x"),
+                "scale_y": _resize_meta.get("scale_y"),
+                # --- estadísticas imagen antes/después (formato perfil de referencia) ---
+                "image_before_norm_stats": {
+                    k: v for k, v in input_stats.items() if k != "aspect_ratio"
+                },
+                "image_after_norm_stats": {
+                    k: v for k, v in output_stats.items() if k != "aspect_ratio"
+                },
+                # --- datos del paciente ---
         except (ValueError, FileNotFoundError, json.JSONDecodeError) as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -466,13 +486,15 @@ class NormalizationService:
         ok, encoded = cv2.imencode(".png", image)
         if not ok:
             raise HTTPException(status_code=500, detail="No fue posible codificar la imagen de salida")
-        return base64.b64encode(encoded.tobytes()).decode("utf-8")
-
-    @staticmethod
-    def _build_visualization(
-        original: np.ndarray,
-        normalized: np.ndarray,
-        compare_normalized: np.ndarray | None = None,
+        returnin": float(np.min(img)),
+            "max": float(np.max(img)),
+            "mean": float(np.mean(img)),
+            "std": float(np.std(img)),
+            "median": float(np.median(img)),
+            "p1": float(np.percentile(img, 1)),
+            "p5": float(np.percentile(img, 5)),
+            "p95": float(np.percentile(img, 95)),
+            "p99": float(np.percentile(img, 99ray | None = None,
     ) -> np.ndarray:
         if compare_normalized is None:
             compare_normalized = normalized
