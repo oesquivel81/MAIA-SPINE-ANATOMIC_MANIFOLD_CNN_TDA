@@ -41,7 +41,7 @@ def load_binary_curve_model(
         raise FileNotFoundError(f"Checkpoint no encontrado: {path}")
 
     # Detectar puntero Git LFS (empieza con "version https://git-lfs")
-    header = path.read_bytes(27)
+    header = path.read_bytes()[:27]
     if header.startswith(b"version https://git-lfs"):
         raise RuntimeError(
             f"El archivo '{path}' es un puntero Git LFS, no el modelo real.\n"
