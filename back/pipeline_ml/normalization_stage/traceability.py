@@ -7,15 +7,19 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import cv2
 import numpy as np
 
-from app.components.mongo_client import MongoComponent
-from app.components.redis_client import RedisComponent
-from app.components.s3_client import S3Component
-from app.core.config import Settings
+# Imports de FastAPI/app solo en tiempo de type-checking.
+# Esto permite importar traceability.py en Colab/standalone sin motor/redis instalados.
+if TYPE_CHECKING:
+    from app.components.mongo_client import MongoComponent
+    from app.components.redis_client import RedisComponent
+    from app.components.s3_client import S3Component
+    from app.core.config import Settings
+
 from pipeline_ml.normalization_stage.logger import log_method_start
 
 logger = logging.getLogger(__name__)
