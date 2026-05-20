@@ -21,12 +21,19 @@ Agrega al payload:
                                                  = (0.55*boundary + 0.85*intervertebral + 0.15*ordinal) * support
     payload["vertical_profiles"]     dict        boundary_profile, inter_profile, combined_profile (norm01 [H])
                                                  y combined_map float32 [H,W]
+    payload["gap_analysis"]          dict        n_peaks, n_gap_peaks, mean_gap_spacing, std_gap_spacing,
+                                                 vertebra_type, figure_path, profile_csv, peaks_csv,
+                                                 df_profile (DataFrame), df_events (DataFrame)
     payload["recon_csv_path"]        str         ruta al CSV de métricas por cabeza
     payload["patch_reconstruction_done"] bool True
 
 Imágenes guardadas adicionales:
-    analysis_grid.png       grid 1×4: imagen | intervertebral | boundary | señal combinada
-    vertical_profiles.png   perfiles boundary / intervertebral / merge con peaks y curvas suavizadas
+    analysis_grid.png                           grid 1×4: imagen | intervertebral | boundary | señal combinada
+    vertical_profiles.png                       perfiles boundary / intervertebral / merge con peaks y curvas suavizadas
+    gap_peak_analysis/{pk}_gap_peak_analysis.png  figura de peaks/gaps vertebrales
+    gap_peak_analysis/{pk}_gap_peak_profile.csv   perfil con scores y flags por fila
+    gap_peak_analysis/{pk}_gap_peak_events.csv    tabla de peaks y gap_peaks detectados
+    gap_peak_analysis/{pk}_gap_peak_summary.csv   resumen estadístico del paciente
 
 Señal combinada:
     binary actúa como soporte (umbral relajado 0.30) — define dónde hay estructura.
@@ -77,6 +84,30 @@ from pipeline_ml.logger import PipelineLogger
 _HEADS: tuple[str, ...] = ("binary", "boundary", "intervertebral", "ordinal")
 _THRESHOLD: float = 0.5
 _IMG_SIZE: int = 224   # tamaño de salida del StudentUNet
+
+
+def _norm01(v: np.ndarray) -> np.ndarray:
+    """Normaliza un vector float32 al rango [0, 1]. Devuelve ceros si es constante."""
+    v = np.asarray(v, dtype=np.float32)
+    if len(v) == 0:
+        return v
+    mn, mx = float(np.nanmin(v)), float(np.nanmax(v))
+    if not (np.isfinite(mn) and np.isfinite(mx)) or mx <= mn:
+        return np.zeros_like(v)
+    return ((v - mn) / (mx - mn + 1e-8)).astype(np.float32)
+
+
+def _classify_gap_spacing(n_peaks: int, mean_spacing: float) -> str:
+    """Clasifica el espaciado entre gaps vertebrales."""
+    if n_peaks <= 2:
+        return "few_or_weak_gaps"
+    if not np.isfinite(mean_spacing):
+        return "unknown"
+    if mean_spacing < 12:
+        return "dense_gaps"
+    if mean_spacing <= 35:
+        return "regular_gaps"
+    return "sparse_gaps"
 
 
 class PatchReconstructionStage(PipelineStage):
@@ -209,6 +240,23 @@ class PatchReconstructionStage(PipelineStage):
             f"PatchReconstructionStage: perfiles verticales guardados → {vp_p}"
         )
 
+        # ── Análisis de peaks/gaps ─────────────────────────────────────
+        patient_key: str = context.metadata.get(
+            "patient_key", context.metadata.get("patient_id", "patient")
+        )
+        gap_dir = out_root / "gap_peak_analysis"
+        gap_dir.mkdir(parents=True, exist_ok=True)
+
+        gap_analysis = self._analyze_peaks_gaps(
+            profiles=profiles,
+            patient_key=patient_key,
+            out_dir=gap_dir,
+            plots_show=plots_show,
+        )
+        logger.info(
+            f"PatchReconstructionStage: gaps/peaks → {gap_analysis['figure_path']}"
+        )
+
         # ── Visualización completa (grid 3 filas) ─────────────────────
         if plots_show:
             self._show_reconstruction(
@@ -225,6 +273,7 @@ class PatchReconstructionStage(PipelineStage):
         payload["support_map"] = support_map
         payload["combined_signal"] = combined_signal
         payload["vertical_profiles"] = profiles
+        payload["gap_analysis"] = gap_analysis
         payload["recon_csv_path"] = str(csv_path)
         payload["patch_reconstruction_done"] = True
         return payload
@@ -436,13 +485,6 @@ class PatchReconstructionStage(PipelineStage):
         # intervertebral pesa más: marca gaps/espacios entre vértebras
         combined = np.clip(0.55 * boundary_w + 0.85 * inter_w, 0.0, 1.0)
         combined_profile = combined.mean(axis=1)
-
-        def _norm01(v: np.ndarray) -> np.ndarray:
-            v = np.asarray(v, dtype=np.float32)
-            vmin, vmax = v.min(), v.max()
-            if vmax > vmin:
-                return (v - vmin) / (vmax - vmin + 1e-8)
-            return np.zeros_like(v)
 
         return {
             "boundary_profile": _norm01(boundary_profile),
@@ -710,3 +752,191 @@ class PatchReconstructionStage(PipelineStage):
         if plots_show:
             plt.show()
         plt.close(fig)
+
+    # ------------------------------------------------------------------
+    # Análisis cuantitativo: peaks, gaps, espaciado vertebral
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _analyze_peaks_gaps(
+        profiles: dict[str, np.ndarray],
+        patient_key: str,
+        out_dir: Path,
+        plots_show: bool = False,
+        distance: int = 8,
+        prominence: float = 0.05,
+        smooth_sigma: float = 2.0,
+    ) -> dict:
+        """
+        Análisis de gaps y peaks vertebrales sobre los perfiles verticales.
+
+        Equivalente a ``analyze_patient_peaks_gaps`` del cuaderno.
+
+        Parameters
+        ----------
+        profiles      : dict de ``_profile_from_maps()`` con
+                        boundary_profile, inter_profile y combined_profile.
+        patient_key   : identificador del paciente (nombra archivos de salida).
+        out_dir       : directorio de salida; se crea si no existe.
+        plots_show    : mostrar figura en pantalla además de guardarla.
+        distance      : distancia mínima entre peaks (scipy.signal.find_peaks).
+        prominence    : prominencia mínima para considerar un peak.
+        smooth_sigma  : sigma del filtro gaussiano para suavizado.
+
+        Returns
+        -------
+        dict con claves: ``n_peaks``, ``n_gap_peaks``, ``mean_gap_spacing``,
+        ``std_gap_spacing``, ``vertebra_type``, ``figure_path``,
+        ``profile_csv``, ``peaks_csv``, ``summary_csv``,
+        ``df_profile`` (DataFrame), ``df_events`` (DataFrame).
+        """
+        import matplotlib.pyplot as plt
+        import pandas as pd
+        from scipy.ndimage import gaussian_filter1d as _gf
+        from scipy.signal import find_peaks as _fp
+
+        # ── Señales ────────────────────────────────────────────────────
+        inter_raw   = _norm01(profiles["inter_profile"])
+        bnd_raw     = _norm01(profiles["boundary_profile"])
+        comb_raw    = _norm01(profiles["combined_profile"])
+        H           = len(inter_raw)
+        curve_idx   = np.arange(H, dtype=np.float32)
+
+        # gap_raw: intervertebral supera boundary → probable espacio entre vértebras
+        gap_raw    = _norm01(np.clip(inter_raw - 0.35 * bnd_raw, 0.0, 1.0))
+        gap_smooth = _norm01(_gf(gap_raw, sigma=smooth_sigma))
+        comb_smooth = _norm01(_gf(comb_raw, sigma=smooth_sigma))
+
+        # ── Peaks ──────────────────────────────────────────────────────
+        _kw = {"distance": distance, "prominence": prominence}
+        peaks,     peak_props = _fp(inter_raw,  **_kw)
+        gap_peaks, gap_props  = _fp(gap_smooth, **_kw)
+
+        # ── Espaciado de gaps ──────────────────────────────────────────
+        if len(gap_peaks) >= 2:
+            spacings         = np.diff(curve_idx[gap_peaks]).astype(np.float32)
+            mean_gap_spacing = float(np.mean(spacings))
+            std_gap_spacing  = float(np.std(spacings))
+        else:
+            mean_gap_spacing = float("nan")
+            std_gap_spacing  = float("nan")
+
+        vertebra_type = _classify_gap_spacing(len(gap_peaks), mean_gap_spacing)
+
+        # ── DataFrame de perfil ────────────────────────────────────────
+        is_peak     = np.zeros(H, dtype=np.int8)
+        is_gap_peak = np.zeros(H, dtype=np.int8)
+        if len(peaks):      is_peak[peaks]         = 1
+        if len(gap_peaks):  is_gap_peak[gap_peaks] = 1
+
+        df_profile = pd.DataFrame({
+            "curve_idx":               curve_idx.astype(int),
+            "inter_profile":           inter_raw,
+            "boundary_profile":        bnd_raw,
+            "combined_profile":        comb_raw,
+            "profile_gap_score_raw":   gap_raw,
+            "profile_gap_score_smooth": gap_smooth,
+            "profile_combined_smooth":  comb_smooth,
+            "is_peak":                 is_peak,
+            "is_gap_peak":             is_gap_peak,
+        })
+        df_profile["patient_key"]      = patient_key
+        df_profile["vertebra_type"]    = vertebra_type
+        df_profile["n_peaks"]          = int(len(peaks))
+        df_profile["n_gap_peaks"]      = int(len(gap_peaks))
+        df_profile["mean_gap_spacing"] = mean_gap_spacing
+        df_profile["std_gap_spacing"]  = std_gap_spacing
+
+        # ── DataFrame de eventos ───────────────────────────────────────
+        peak_prom = peak_props.get("prominences", np.zeros(len(peaks)))
+        gap_prom  = gap_props.get("prominences",  np.zeros(len(gap_peaks)))
+
+        rows: list[dict] = []
+        for i, pk in enumerate(peaks):
+            rows.append({
+                "patient_key": patient_key,
+                "kind":        "peak",
+                "idx":         int(pk),
+                "curve_idx":   float(curve_idx[pk]),
+                "value":       float(inter_raw[pk]),
+                "prominence":  float(peak_prom[i]) if i < len(peak_prom) else float("nan"),
+            })
+        for i, pk in enumerate(gap_peaks):
+            rows.append({
+                "patient_key": patient_key,
+                "kind":        "gap_peak",
+                "idx":         int(pk),
+                "curve_idx":   float(curve_idx[pk]),
+                "value":       float(gap_smooth[pk]),
+                "prominence":  float(gap_prom[i]) if i < len(gap_prom) else float("nan"),
+            })
+        df_events = (
+            pd.DataFrame(rows)
+            if rows
+            else pd.DataFrame(
+                columns=["patient_key", "kind", "idx", "curve_idx", "value", "prominence"]
+            )
+        )
+
+        # ── Guardar CSVs ───────────────────────────────────────────────
+        out_dir.mkdir(parents=True, exist_ok=True)
+        profile_csv = out_dir / f"{patient_key}_gap_peak_profile.csv"
+        peaks_csv   = out_dir / f"{patient_key}_gap_peak_events.csv"
+        summary_csv = out_dir / f"{patient_key}_gap_peak_summary.csv"
+        fig_path    = out_dir / f"{patient_key}_gap_peak_analysis.png"
+
+        summary = {
+            "patient_key":      patient_key,
+            "status":           "ok",
+            "n_points":         H,
+            "n_peaks":          int(len(peaks)),
+            "n_gap_peaks":      int(len(gap_peaks)),
+            "mean_gap_spacing": mean_gap_spacing,
+            "std_gap_spacing":  std_gap_spacing,
+            "vertebra_type":    vertebra_type,
+            "profile_csv":      str(profile_csv),
+            "peaks_csv":        str(peaks_csv),
+            "summary_csv":      str(summary_csv),
+            "figure_path":      str(fig_path),
+        }
+
+        df_profile.to_csv(str(profile_csv), index=False)
+        df_events.to_csv(str(peaks_csv),    index=False)
+        pd.DataFrame([summary]).to_csv(str(summary_csv), index=False)
+
+        # ── Figura ─────────────────────────────────────────────────────
+        fig, ax = plt.subplots(1, 1, figsize=(14, 5))
+
+        ax.plot(curve_idx, inter_raw,    label="intervertebral (norm)", alpha=0.7,  color="#4CAF50")
+        ax.plot(curve_idx, bnd_raw,      label="boundary (norm)",       alpha=0.7,  color="#2196F3")
+        ax.plot(curve_idx, gap_smooth,   label="gap smooth",            linewidth=2, color="#FF9800")
+        ax.plot(curve_idx, comb_smooth,  label="combined smooth",       linewidth=1.5, color="#9C27B0")
+
+        if len(peaks):
+            ax.scatter(
+                curve_idx[peaks], inter_raw[peaks],
+                s=25, color="#F44336", zorder=5, label=f"peaks ({len(peaks)})",
+            )
+        if len(gap_peaks):
+            ax.scatter(
+                curve_idx[gap_peaks], gap_smooth[gap_peaks],
+                s=35, color="#FF5722", zorder=5, marker="^",
+                label=f"gap peaks ({len(gap_peaks)})",
+            )
+
+        ax.set_title(
+            f"{patient_key} | gap_peaks={len(gap_peaks)} | type={vertebra_type}",
+            fontsize=9,
+        )
+        ax.set_xlabel("Fila (px)")
+        ax.set_ylabel("Señal normalizada")
+        ax.grid(True, alpha=0.25)
+        ax.legend(fontsize=7)
+
+        plt.tight_layout()
+        fig.savefig(str(fig_path), dpi=160, bbox_inches="tight")
+        if plots_show:
+            plt.show()
+        plt.close(fig)
+
+        return {**summary, "df_profile": df_profile, "df_events": df_events}
