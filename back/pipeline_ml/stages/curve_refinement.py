@@ -206,8 +206,11 @@ class CurveRefinementStage(PipelineStage):
 
         # --- 5. Visualización ---
         if context.metadata.get("plots_show", False):
-            self._show_likelihood(image_likelihood, binary_band, curve_bonus, likelihood_final)
-            self._show_curve(img01, prior_ys, prior_xs, dp_ys, dp_xs, dp_heatmap, dp_mask)
+            self._show_refinement_grid(
+                img01, binary_refined, image_likelihood, binary_band,
+                curve_bonus, likelihood_final,
+                prior_ys, prior_xs, dp_ys, dp_xs, dp_heatmap, dp_mask,
+            )
 
         # --- 6. Actualizar payload ---
         payload["dp_ys"] = dp_ys
@@ -403,41 +406,13 @@ class CurveRefinementStage(PipelineStage):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _show_likelihood(
+    def _show_refinement_grid(
+        img01: np.ndarray,
+        binary_refined: np.ndarray,
         image_likelihood: np.ndarray,
         binary_band: np.ndarray,
         curve_bonus: np.ndarray,
         likelihood_final: np.ndarray,
-    ) -> None:
-        """Muestra los 4 mapas intermedios de likelihood."""
-        import matplotlib.pyplot as plt  # lazy import
-
-        titles = [
-            "Likelihood imagen\n(CLAHE + Scharr)",
-            "Banda binaria\n(dilatada)",
-            "Bonus curva previa\n(suavizado)",
-            "Likelihood final\n(0.62·img + 0.18·bin + 0.20·curva)",
-        ]
-        arrays = [image_likelihood, binary_band, curve_bonus, likelihood_final]
-
-        fig, axes = plt.subplots(1, 4, figsize=(20, 5))
-        for ax, arr, title in zip(axes, arrays, titles):
-            ax.imshow(arr, cmap="gray")
-            ax.set_title(title, fontsize=9)
-            ax.axis("off")
-            ax.set_xlabel(
-                f"shape={arr.shape}  min={arr.min():.3f}  max={arr.max():.3f}",
-                fontsize=7,
-                labelpad=4,
-            )
-
-        fig.suptitle("CurveRefinementStage — Mapas de likelihood", fontsize=11)
-        plt.tight_layout()
-        plt.show()
-
-    @staticmethod
-    def _show_curve(
-        img01: np.ndarray,
         prior_ys: np.ndarray,
         prior_xs: np.ndarray,
         dp_ys: np.ndarray,
@@ -445,30 +420,71 @@ class CurveRefinementStage(PipelineStage):
         dp_heatmap: np.ndarray,
         dp_mask: np.ndarray,
     ) -> None:
-        """Grid 1×3: curva previa | curva DP | overlay final."""
+        """Grid 2×4 completo: imagen | binaria | likelihood | likelihood final
+                              curva previa | curva DP | overlay | comparación."""
         import matplotlib.pyplot as plt  # lazy import
 
-        fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+        def _stats(arr: np.ndarray) -> str:
+            return (
+                f"min={arr.min():.3f}  max={arr.max():.3f}\n"
+                f"mean={arr.mean():.3f}  std={arr.std():.3f}"
+            )
 
-        axes[0].imshow(img01, cmap="gray")
-        axes[0].plot(prior_xs, prior_ys, color="cyan", linewidth=1.5)
-        axes[0].set_title(f"Curva inicial (binaria)\n{len(prior_ys)} pts", fontsize=9)
-        axes[0].axis("off")
+        fig, axes = plt.subplots(2, 4, figsize=(26, 12))
 
-        axes[1].imshow(img01, cmap="gray")
-        axes[1].plot(dp_xs, dp_ys, color="lime", linewidth=2)
-        axes[1].set_title(f"Curva refinada DP\n{len(dp_ys)} pts", fontsize=9)
-        axes[1].axis("off")
+        # ---- Fila 0: imágenes base y likelihood ----
+        axes[0, 0].imshow(img01, cmap="gray")
+        axes[0, 0].set_title("Imagen normalizada", fontsize=9)
+        axes[0, 0].set_xlabel(_stats(img01), fontsize=7, labelpad=4)
+        axes[0, 0].axis("off")
 
-        axes[2].imshow(img01, cmap="gray")
-        axes[2].imshow(dp_heatmap, cmap="hot", alpha=0.55)
-        axes[2].plot(dp_xs, dp_ys, color="lime", linewidth=2)
-        axes[2].set_title(
-            f"Overlay final\ncoverage={dp_mask.mean() * 100:.2f}%",
-            fontsize=9,
+        axes[0, 1].imshow(binary_refined, cmap="gray")
+        axes[0, 1].set_title(
+            f"Binaria refinada\ncoverage={binary_refined.mean() * 100:.1f}%", fontsize=9
         )
-        axes[2].axis("off")
+        axes[0, 1].set_xlabel(_stats(binary_refined.astype(np.float32)), fontsize=7, labelpad=4)
+        axes[0, 1].axis("off")
 
-        fig.suptitle("CurveRefinementStage — Curva espinal refinada", fontsize=11)
+        axes[0, 2].imshow(image_likelihood, cmap="gray")
+        axes[0, 2].set_title("Likelihood imagen\n(CLAHE + Scharr)", fontsize=9)
+        axes[0, 2].set_xlabel(_stats(image_likelihood), fontsize=7, labelpad=4)
+        axes[0, 2].axis("off")
+
+        axes[0, 3].imshow(likelihood_final, cmap="hot")
+        axes[0, 3].set_title(
+            "Likelihood final\n(0.62·img + 0.18·bin + 0.20·curva)", fontsize=9
+        )
+        axes[0, 3].set_xlabel(_stats(likelihood_final), fontsize=7, labelpad=4)
+        axes[0, 3].axis("off")
+
+        # ---- Fila 1: curvas ----
+        axes[1, 0].imshow(img01, cmap="gray")
+        axes[1, 0].plot(prior_xs, prior_ys, color="cyan", linewidth=1.5)
+        axes[1, 0].set_title(f"Curva previa (centerline)\n{len(prior_ys)} pts", fontsize=9)
+        axes[1, 0].axis("off")
+
+        axes[1, 1].imshow(img01, cmap="gray")
+        axes[1, 1].plot(dp_xs, dp_ys, color="lime", linewidth=2)
+        axes[1, 1].set_title(f"Curva refinada DP\n{len(dp_ys)} pts", fontsize=9)
+        axes[1, 1].axis("off")
+
+        axes[1, 2].imshow(img01, cmap="gray")
+        axes[1, 2].imshow(dp_heatmap, cmap="hot", alpha=0.55)
+        axes[1, 2].plot(dp_xs, dp_ys, color="lime", linewidth=2)
+        axes[1, 2].set_title(
+            f"Overlay final\ncoverage={dp_mask.mean() * 100:.2f}%", fontsize=9
+        )
+        axes[1, 2].axis("off")
+
+        axes[1, 3].imshow(img01, cmap="gray")
+        axes[1, 3].plot(prior_xs, prior_ys, color="cyan", linewidth=1.5, label="previa")
+        axes[1, 3].plot(dp_xs, dp_ys, color="lime", linewidth=2, label="DP")
+        axes[1, 3].legend(loc="upper right", fontsize=7)
+        axes[1, 3].set_title("Comparación curva previa vs DP", fontsize=9)
+        axes[1, 3].axis("off")
+
+        fig.suptitle(
+            "CurveRefinementStage — Pipeline de refinamiento espinal", fontsize=12
+        )
         plt.tight_layout()
         plt.show()
