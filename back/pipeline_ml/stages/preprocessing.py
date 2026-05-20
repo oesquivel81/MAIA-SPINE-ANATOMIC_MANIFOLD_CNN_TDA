@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import json
 import re
 from pathlib import Path
@@ -43,15 +44,15 @@ class PreprocessingStage(PipelineStage):
             f"distancia={distance:.6f}"
         )
 
-        loop = asyncio.new_event_loop()
-        try:
-            normalized, _, norm_ctx = loop.run_until_complete(
-                engine.run(image, closest_profile, distance)
-            )
-        finally:
-            loop.close()
+        # Ejecutar la normalización async en un thread separado.
+        # asyncio.new_event_loop().run_until_complete() falla en Colab/Jupyter (Python 3.12)
+        # porque ya hay un event loop corriendo (IPython/Tornado).
+        # Solución: correr asyncio.run() en un ThreadPoolExecutor donde no hay loop activo.
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            normalized, _, norm_ctx = pool.submit(
+                lambda: asyncio.run(engine.run(image, closest_profile, distance))
+            ).result()
 
-        # --- 4. Estadísticas de la imagen normalizada ---
         output_stats = self._compute_stats(normalized)
         logger.debug(f"Preprocessing: stats salida → mean={output_stats['mean']:.2f}, std={output_stats['std']:.2f}")
 
