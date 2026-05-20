@@ -14,6 +14,7 @@ from pipeline_ml.stages import (
     BinaryCurveStage,
     CurveRefinementStage,
     CurvePatchStage,
+    StudentPatchStage,
     IngestionStage,
     InferenceStage,
     PersistenceStage,
@@ -71,6 +72,7 @@ class PipelineML:
             BinaryCurveStage(),
             CurveRefinementStage(),
             CurvePatchStage(),
+            StudentPatchStage(),
             InferenceStage(),
             PostprocessingStage(),
             PersistenceStage(),
@@ -92,6 +94,7 @@ class PipelineML:
         context.metadata["binary_curve_model_path"] = self.config.paths.binary_curve_model_path
         context.metadata["workspace_root"] = self.config.paths.workspace_root
         context.metadata["n_curve_patches"] = self.config.paths.n_curve_patches
+        context.metadata["student_patch_model_path"] = self.config.paths.student_patch_model_path
 
         payload: dict[str, Any] = {"image": image, "request_id": req_id}
 

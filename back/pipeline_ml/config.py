@@ -61,6 +61,10 @@ class PipelinePaths:
     # Cada parche cubre un segmento equiponderado de la curva.  Default=8.
     n_curve_patches: int = 8
 
+    # Ruta al checkpoint del StudentUNet1CH4Heads (StudentPatchStage).
+    # Ejemplo: /content/experiments/pipeline_model/01_binary_curve_cnn/student_1ch_4heads_boundary_rescue_final.pt
+    student_patch_model_path: str = ""
+
     # URL de Redis para backup del trace (opcional, best-effort)
     # Ejemplo: redis://localhost:6379/0
     redis_url: str = ""
