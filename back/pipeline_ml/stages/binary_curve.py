@@ -197,10 +197,26 @@ class BinaryCurveStage(PipelineStage):
         context: PipelineContext,
         logger: PipelineLogger,
     ) -> Path:
-        """Guarda máscara uint8 {0,1} como PNG de 8 bits {0, 255} en outputs_dir."""
-        path = context.outputs_dir / filename
-        cv2.imwrite(str(path), mask * 255)
-        logger.info(f"BinaryCurveStage: {filename} guardado en {path}")
+        """Guarda máscara uint8 {0,1} como PNG de 8 bits {0,255} en outputs_dir/cnn_curve/."""
+        # Subcarpeta dedicada para predicciones de este stage
+        out_dir = context.outputs_dir / "cnn_curve"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        path = out_dir / filename
+
+        # Forzar dtype uint8 explicitamente — numpy puede elevar uint8*255 a int64
+        # lo que hace que cv2.imwrite falle silenciosamente
+        img_to_write = (mask.astype(np.uint8) * 255).astype(np.uint8)
+
+        ok = cv2.imwrite(str(path), img_to_write)
+        if ok:
+            logger.info(f"BinaryCurveStage: {filename} guardado en {path}")
+        else:
+            logger.warn(
+                f"BinaryCurveStage: cv2.imwrite falló para {path}. "
+                f"dtype={img_to_write.dtype}, shape={img_to_write.shape}, "
+                f"max={img_to_write.max()}"
+            )
         return path
 
     @staticmethod
