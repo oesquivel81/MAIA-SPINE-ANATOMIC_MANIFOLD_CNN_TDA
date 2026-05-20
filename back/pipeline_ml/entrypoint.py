@@ -86,6 +86,7 @@ class PipelineML:
         context.metadata["redis_url"] = self.config.paths.redis_url
         context.metadata["plots_show"] = self.config.debug.plots_show
         context.metadata["binary_curve_model_path"] = self.config.paths.binary_curve_model_path
+        context.metadata["workspace_root"] = self.config.paths.workspace_root
 
         payload: dict[str, Any] = {"image": image, "request_id": req_id}
 
