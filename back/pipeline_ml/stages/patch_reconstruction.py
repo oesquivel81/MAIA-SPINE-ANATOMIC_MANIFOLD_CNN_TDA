@@ -16,8 +16,17 @@ Agrega al payload:
     payload["recon_masks"]           dict[str, ndarray]  uint8 {0,1} [H, W] por cabeza (≥ threshold)
     payload["freq_maps"]             dict[str, ndarray]  float32 [H, W] fracción de parches que votan +
     payload["coverage_map"]          ndarray     float32 [H, W] fracción de parches que cubren cada px
+    payload["support_map"]           ndarray     uint8 {0,1} [H, W]  binary>0.30 & coverage>0
+    payload["combined_signal"]       ndarray     float32 [H, W]  señal estructural ponderada
+                                                 = (0.55*boundary + 0.85*intervertebral + 0.15*ordinal) * support
     payload["recon_csv_path"]        str         ruta al CSV de métricas por cabeza
     payload["patch_reconstruction_done"] bool True
+
+Señal combinada:
+    binary actúa como soporte (umbral relajado 0.30) — define dónde hay estructura.
+    boundary e intervertebral son las señales estructurales principales.
+    ordinal aporta información de orden secuencial con peso menor.
+    La suma de pesos es 1.55; el resultado se clipea a [0, 1] solo para PNG.
 
 Algoritmo de reconstrucción (por cabeza):
     1. Crear acumuladores: accum[H,W] y count[H,W] a cero.
@@ -161,9 +170,28 @@ class PatchReconstructionStage(PipelineStage):
             w.writeheader()
             w.writerows(csv_rows)
 
+        # ── Señal combinada ────────────────────────────────────────────
+        support_map, combined_signal = self._compute_combined_signal(
+            recon_maps=recon_maps,
+            coverage_map=coverage_map,
+        )
+
+        sp = out_root / "support_map.png"
+        cv2.imwrite(str(sp), support_map * 255)
+
+        cs_p = out_root / "combined_signal.png"
+        cv2.imwrite(str(cs_p), (combined_signal.clip(0.0, 1.0) * 255).astype(np.uint8))
+
+        logger.info(
+            f"PatchReconstructionStage: señal combinada guardada → {cs_p}"
+        )
+
         # ── Visualizaciones ────────────────────────────────────────────
         if plots_show:
-            self._show_reconstruction(image, recon_maps, freq_maps, coverage_map)
+            self._show_reconstruction(
+                image, recon_maps, freq_maps, coverage_map,
+                support_map, combined_signal,
+            )
 
         # ── Payload ────────────────────────────────────────────────────
         payload["recon_dir"] = str(out_root)
@@ -171,6 +199,8 @@ class PatchReconstructionStage(PipelineStage):
         payload["recon_masks"] = recon_masks
         payload["freq_maps"] = freq_maps
         payload["coverage_map"] = coverage_map
+        payload["support_map"] = support_map
+        payload["combined_signal"] = combined_signal
         payload["recon_csv_path"] = str(csv_path)
         payload["patch_reconstruction_done"] = True
         return payload
@@ -276,6 +306,40 @@ class PatchReconstructionStage(PipelineStage):
 
         return recon_maps, recon_masks, freq_maps, coverage_map
 
+    @staticmethod
+    def _compute_combined_signal(
+        recon_maps: dict[str, np.ndarray],
+        coverage_map: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Genera la señal estructural combinada a partir de las cabezas reconstruidas.
+
+        ``binary`` actúa como soporte con umbral relajado (> 0.30): define
+        los píxeles donde existe estructura espinal visible.
+        ``boundary`` e ``intervertebral`` son las señales estructurales
+        principales (pesos altos). ``ordinal`` aporta información de orden
+        con peso menor.
+
+        Returns:
+            support_map:     uint8 {0,1}  — máscara de soporte
+            combined_signal: float32      — señal ponderada (puede superar 1.0
+                                            ligeramente; clipear al guardar PNG)
+        """
+        binary_n        = recon_maps["binary"]
+        boundary_n      = recon_maps["boundary"]
+        inter_n         = recon_maps["intervertebral"]
+        ordinal_n       = recon_maps["ordinal"]
+
+        support = ((binary_n > 0.30) & (coverage_map > 0)).astype(np.uint8)
+
+        signal_weighted = (
+            0.55 * boundary_n +
+            0.85 * inter_n    +
+            0.15 * ordinal_n
+        ) * support
+
+        return support, signal_weighted.astype(np.float32)
+
     # ------------------------------------------------------------------
     # Métricas CSV
     # ------------------------------------------------------------------
@@ -316,32 +380,35 @@ class PatchReconstructionStage(PipelineStage):
         recon_maps: dict[str, np.ndarray],
         freq_maps:  dict[str, np.ndarray],
         coverage_map: np.ndarray,
+        support_map: np.ndarray,
+        combined_signal: np.ndarray,
     ) -> None:
         """
-        Grid 2 filas × (1 + N_heads) columnas:
-          fila 0: imagen | recon_binary | recon_boundary | recon_intervertebral | recon_ordinal
-          fila 1: coverage | freq_binary | freq_boundary | freq_intervertebral | freq_ordinal
+        Grid 3 filas × (1 + N_heads) columnas:
+          fila 0: imagen  | binary  | boundary | intervertebral | ordinal
+          fila 1: coverage| freq_b  | freq_bo  | freq_inter     | freq_ord
+          fila 2: support | combined_signal (span 4 cols)
         """
         import matplotlib.pyplot as plt
 
-        ncols = 1 + len(_HEADS)
-        fig, axes = plt.subplots(2, ncols, figsize=(ncols * 2.8, 6))
+        ncols = 1 + len(_HEADS)  # 5
+        fig, axes = plt.subplots(3, ncols, figsize=(ncols * 2.8, 9))
 
-        # Fila 0 — reconstrucción media
+        # ── Fila 0: reconstrucción media por cabeza ────────────────────
         axes[0, 0].imshow(image if image.ndim == 2 else image[:, :, 0], cmap="gray")
         axes[0, 0].set_title("Imagen", fontsize=8, fontweight="bold")
         axes[0, 0].axis("off")
 
         for j, head in enumerate(_HEADS, start=1):
-            axes[0, j].imshow(recon_maps[head], cmap="gray_r", vmin=0, vmax=1)
             rm = recon_maps[head]
+            axes[0, j].imshow(rm, cmap="gray_r", vmin=0, vmax=1)
             axes[0, j].set_title(
                 f"{head}\ncov={np.mean(rm >= _THRESHOLD)*100:.1f}%",
                 fontsize=7,
             )
             axes[0, j].axis("off")
 
-        # Fila 1 — análisis de frecuencia
+        # ── Fila 1: análisis de frecuencia ─────────────────────────────
         axes[1, 0].imshow(coverage_map, cmap="gray_r", vmin=0, vmax=1)
         axes[1, 0].set_title(
             f"Cobertura\nmean={coverage_map.mean():.2f}",
@@ -350,13 +417,34 @@ class PatchReconstructionStage(PipelineStage):
         axes[1, 0].axis("off")
 
         for j, head in enumerate(_HEADS, start=1):
-            axes[1, j].imshow(freq_maps[head], cmap="gray_r", vmin=0, vmax=1)
             fm = freq_maps[head]
+            axes[1, j].imshow(fm, cmap="gray_r", vmin=0, vmax=1)
             axes[1, j].set_title(
                 f"freq_{head}\nmean={fm.mean():.2f}",
                 fontsize=7,
             )
             axes[1, j].axis("off")
+
+        # ── Fila 2: soporte y señal combinada ──────────────────────────
+        axes[2, 0].imshow(support_map, cmap="gray_r", vmin=0, vmax=1)
+        axes[2, 0].set_title(
+            f"Soporte\n(binary>0.30)\ncov={support_map.mean()*100:.1f}%",
+            fontsize=7,
+        )
+        axes[2, 0].axis("off")
+
+        # Señal combinada ocupa las 4 columnas restantes de la fila 2
+        # Se muestra en la columna 1; las 2-4 se ocultan
+        vmax_cs = float(combined_signal.max()) or 1.0
+        axes[2, 1].imshow(combined_signal, cmap="gray_r", vmin=0, vmax=vmax_cs)
+        axes[2, 1].set_title(
+            f"Señal combinada\n0.55·bound+0.85·inter+0.15·ord\nmax={vmax_cs:.2f}",
+            fontsize=7,
+        )
+        axes[2, 1].axis("off")
+
+        for j in range(2, ncols):
+            axes[2, j].axis("off")
 
         fig.suptitle("PatchReconstructionStage — mapas full-size", fontsize=9)
         plt.tight_layout()
