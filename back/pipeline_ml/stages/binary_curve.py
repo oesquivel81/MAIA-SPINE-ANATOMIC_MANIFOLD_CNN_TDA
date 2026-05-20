@@ -60,13 +60,31 @@ class BinaryCurveStage(PipelineStage):
         if image is None:
             raise ValueError("BinaryCurveStage: no hay imagen en el payload. Ejecuta PreprocessingStage primero.")
 
-        # Ruta del checkpoint: context.metadata o fallback en work_dir
-        checkpoint_path = context.metadata.get("binary_curve_model_path", "")
+        # Ruta del checkpoint: context.metadata
+        checkpoint_path = context.metadata.get("binary_curve_model_path", "").strip()
+
+        # Intentar resolver la ruta si no existe tal cual
+        if checkpoint_path:
+            checkpoint_path = self._resolve_checkpoint_path(checkpoint_path, context, logger)
+
+        # Si sigue vacía o no existe, saltar el stage sin explotar el pipeline
         if not checkpoint_path:
-            raise ValueError(
-                "BinaryCurveStage: falta 'binary_curve_model_path' en context.metadata. "
-                "Configúralo en PipelinePaths.binary_curve_model_path"
+            logger.warn(
+                "BinaryCurveStage: 'binary_curve_model_path' no configurado. "
+                "Agrega la ruta al checkpoint en paths.binary_curve_model_path del config JSON. "
+                "Stage saltado."
             )
+            payload["binary_curve_skipped"] = True
+            return payload
+
+        if not Path(checkpoint_path).exists():
+            logger.warn(
+                f"BinaryCurveStage: checkpoint no encontrado en '{checkpoint_path}'. "
+                "Verifica la ruta en paths.binary_curve_model_path. Stage saltado."
+            )
+            payload["binary_curve_skipped"] = True
+            payload["binary_curve_checkpoint_path_tried"] = checkpoint_path
+            return payload
 
         # --- 1. Cargar modelo (lazy) ---
         self._load_model(checkpoint_path, logger)
@@ -116,6 +134,42 @@ class BinaryCurveStage(PipelineStage):
     # ------------------------------------------------------------------
     # Helpers privados
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _resolve_checkpoint_path(
+        checkpoint_path: str,
+        context: PipelineContext,
+        logger: PipelineLogger,
+    ) -> str:
+        """
+        Intenta resolver la ruta del checkpoint:
+        1. Tal cual (absoluta).
+        2. Relativa al workspace_root del config.
+        3. Relativa al work_dir del contexto (work_dir/../../..)
+        Devuelve la primera ruta que exista, o la original si ninguna funciona.
+        """
+        from pathlib import Path as _Path
+
+        candidates = [checkpoint_path]
+
+        workspace_root = context.metadata.get("workspace_root", "")
+        if workspace_root:
+            # quitar '/' inicial del path para hacer join correcto
+            rel = checkpoint_path.lstrip("/")
+            candidates.append(str(_Path(workspace_root) / rel))
+
+        for candidate in candidates:
+            if _Path(candidate).exists():
+                if candidate != checkpoint_path:
+                    logger.info(f"BinaryCurveStage: ruta resuelta → {candidate}")
+                return candidate
+
+        # Ninguna encontrada: devolver la original para que el caller la rechace
+        logger.warn(
+            f"BinaryCurveStage: probé las siguientes rutas y ninguna existe:\n"
+            + "\n".join(f"  - {c}" for c in candidates)
+        )
+        return checkpoint_path
 
     @staticmethod
     def _image_to_tensor(image: np.ndarray, device: torch.device) -> torch.Tensor:
