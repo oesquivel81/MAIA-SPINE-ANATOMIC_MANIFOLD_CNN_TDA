@@ -57,6 +57,10 @@ class PipelinePaths:
     # Ejemplo: /content/experiments/pipeline_model/01_binary_curve_cnn/best_binary_curve_model.pt
     binary_curve_model_path: str = ""
 
+    # Número de parches cuadrados que CurvePatchStage extrae de la curva espinal.
+    # Cada parche cubre un segmento equiponderado de la curva.  Default=8.
+    n_curve_patches: int = 8
+
     # URL de Redis para backup del trace (opcional, best-effort)
     # Ejemplo: redis://localhost:6379/0
     redis_url: str = ""

@@ -247,6 +247,98 @@ Se generan **tres figuras** en secuencia:
 - **Panel derecho**: tabla matplotlib con `head(8) + ... + tail(8)` del CSV.
 - Tambien imprime en stdout: `describe()`, `head(10)`, `tail(10)` del DataFrame.
 
+---
+
+## CurvePatchStage — completado
+
+Stage que divide la radiografía normalizada en **N=8 parches dinámicos cuadrados**, cada uno centrado en un segmento de la curva espinal refinada por DP. Implementación fiel al **BLOQUE H** del cuaderno Colab (`celda 86`).
+
+### Entradas del payload
+
+| Clave | Tipo | Descripcion |
+|-------|------|-------------|
+| `image` | `np.ndarray [H,W]` uint8/float32 | Imagen normalizada |
+| `binary_mask` | `np.ndarray [H,W]` uint8 `{0,1}` | Mascara binaria de `BinaryCurveStage` |
+| `dp_ys` | `np.ndarray [N]` int32 | Coordenadas Y de la curva DP (full-res) |
+| `dp_xs` | `np.ndarray [N]` float32 | Coordenadas X de la curva DP (full-res) |
+| `dp_mask` | `np.ndarray [H,W]` uint8 `{0,1}` | Mascara de curva DP (opcional) |
+
+### Algoritmo
+
+```
+1. Segmenta los índices de la curva DP en N_PATCHES partes equiponderadas (np.linspace).
+2. Para cada segmento:
+   a. cy, cx = mediana de dp_ys[i:j], dp_xs[i:j]
+   b. seg_h  = dp_ys[j-1] - dp_ys[i]   (rango vertical del segmento)
+   c. local_width = ancho medio de binary_mask sobre filas [dp_ys[i] .. dp_ys[j-1]]
+   d. side = clamp(max(SEG_H_FACTOR * seg_h, WIDTH_FACTOR * local_width),
+                   MIN_SIDE_FRAC * min(H,W),
+                   MAX_SIDE_FRAC * min(H,W))
+   e. crop_square_dynamic(image, cy, cx, side) → padding y recorte cuadrado
+   f. Guarda PNG imagen, binaria y curva en subdirectorios
+3. Genera curve_patch_manifest.csv con todas las columnas de metadatos.
+```
+
+### Hiperparametros
+
+| Constante | Valor | Descripcion |
+|-----------|-------|-------------|
+| `_N_PATCHES` | 8 | Numero de parches (configurable via `config.paths.n_curve_patches`) |
+| `_MIN_SIDE_FRAC` | 0.18 | Fraccion minima de `min(H,W)` para el lado del parche |
+| `_MAX_SIDE_FRAC` | 0.70 | Fraccion maxima de `min(H,W)` para el lado del parche |
+| `_SEGMENT_H_FACTOR` | 1.60 | Multiplicador del rango vertical del segmento |
+| `_WIDTH_FACTOR` | 1.45 | Multiplicador del ancho local de la mascara binaria |
+
+### Salidas del payload
+
+| Clave | Tipo | Descripcion |
+|-------|------|-------------|
+| `patch_dir` | str | Ruta al directorio raiz de parches |
+| `patch_csv_path` | str | Ruta al CSV manifest |
+| `patch_count` | int | Numero de parches generados |
+| `patches` | `list[np.ndarray]` float32 | Parches imagen `[side_i, side_i]` |
+| `patch_meta` | `list[dict]` | Metadatos por parche (mismas cols que CSV) |
+| `curve_patch_done` | bool `True` | Bandera para siguiente stage |
+
+### Archivos guardados en `outputs/curve_patches/`
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `images/patch_00.png` … `patch_07.png` | Parches de imagen normalizada |
+| `binary/patch_00_binary.png` … | Parches de mascara binaria |
+| `curve/patch_00_curve.png` … | Parches de mascara de curva DP |
+| `curve_patch_manifest.csv` | Manifest completo con todas las columnas de metadatos |
+
+### Columnas del CSV manifest
+
+`patient_key`, `patch_idx`, `source_h`, `source_w`, `center_y_full`, `center_x_full`,
+`segment_start_idx`, `segment_end_idx`, `segment_h_full`, `local_width_full`, `side`,
+`patch_image_path`, `patch_binary_path`, `patch_curve_path`,
+`crop_y1`, `crop_y2`, `crop_x1`, `crop_x2`, `crop_side`,
+`pad_top`, `pad_bottom`, `pad_left`, `pad_right`
+
+### Condicion de skip
+
+El stage se omite (con warning) si:
+- `curve_refinement_skipped = True` en el payload, o
+- `curve_refinement_done` no está presente en el payload, o
+- `len(dp_ys) < n_patches`
+
+### Visualizacion (`plots_show=True`)
+
+Se genera una **figura de 2 filas**:
+
+**Fila 0 — Overview espacial:**
+- Imagen normalizada completa con overlay de la curva DP (polyline rojo).
+- Cajas de todos los parches (rectangulos coloreados con paleta HSV).
+- Marcadores de centroide `+` y numeros de parche.
+
+**Fila 1 — Detalle por parche (N paneles):**
+- Cada panel muestra el parche recortado con overlay de la curva DP (colormap Reds).
+- Borde del panel con el mismo color HSV que la caja del overview.
+
+---
+
 ## models/ — Clases identificadas del CNN binario/curva
 
 > Fuente: `experiments/colab/PIPELINE_COMPLETE_2_CNN_OLD_SHARDS_REGIONIDX_FROM_YLABEL_FAST_20E_BS64 (8).ipynb`  
@@ -378,11 +470,28 @@ Ver seccion **BinaryCurveStage — completado** arriba.
   - 3 visualizaciones: `_show_refinement_grid` (2x4), `_show_curve_heatmap` (2x3), `_show_curve_csv` (1x2 scatter+tabla).
 - Agregado `debug.plots_show: bool` en `config.py` y propagado al contexto desde `entrypoint.py`.
 - Orden de stages: `Ingestion → Preprocessing → BinaryCurve → CurveRefinement → Inference → Postprocessing → Persistence`.
+- Implementado `CurvePatchStage` en `feature/curve-patch-stage`:
+  - Algoritmo fiel al BLOQUE H del cuaderno Colab (celda 86).
+  - N=8 parches dinamicos cuadrados alineados a la curva DP (dp_ys/dp_xs en full-res).
+  - Lado del parche calculado dinamicamente: `max(SEG_H_FACTOR*seg_h, WIDTH_FACTOR*local_width)` con clamp a `[MIN_SIDE_FRAC, MAX_SIDE_FRAC] * min(H,W)`.
+  - `_crop_square_dynamic()`: padding `np.pad(constant_values=0)` para parches en bordes.
+  - Guarda 3 PNGs por parche: imagen, binaria, curva.
+  - `curve_patch_manifest.csv` con 23 columnas de metadatos y coordenadas completas.
+  - Visualizacion `_show_patch_debug`: figura 2 filas — overview espacial con cajas coloreadas + N paneles individuales con overlay curva.
+  - Hiperparametros: N=8, MIN_SIDE_FRAC=0.18, MAX_SIDE_FRAC=0.70, SEG_H_FACTOR=1.60, WIDTH_FACTOR=1.45.
+  - `config.py`: agrega `n_curve_patches: int = 8` a `PipelinePaths`.
+  - `entrypoint.py`: inserta `CurvePatchStage()` despues de `CurveRefinementStage()` y propaga `n_curve_patches`.
+- Orden de stages actualizado: `Ingestion → Preprocessing → BinaryCurve → CurveRefinement → CurvePatch → Inference → Postprocessing → Persistence`.
+- Documentacion del cuaderno Colab: `experiments/colab/README_PATCH_DIVISION_AND_NERVE.md` (estructura de shards, multiclass target, intervertebral target, pipeline flow).
 
 ## Siguientes pasos sugeridos
 
-1. Conectar `outputs/s3.py` al cliente real de S3 del proyecto.
-2. Conectar `outputs/mongo_metrics.py` al repositorio Mongo existente.
-3. Implementar productor Kafka y dispatcher Lambda reales.
-4. Implementar `InferenceStage` real con carga de joblibs para `student_manifold_cnn` y `clustering`.
+1. Implementar `InferenceStage` real:
+   - Recibe `patches` (list[np.ndarray]) + `patch_meta` del payload de `CurvePatchStage`.
+   - Carga `student_manifold_cnn` y `clustering` desde `assets.joblib_paths[1]` y `[2]`.
+   - Produce prediccion por parche y prediccion global.
+2. Conectar `outputs/s3.py` al cliente real de S3 del proyecto.
+3. Conectar `outputs/mongo_metrics.py` al repositorio Mongo existente.
+4. Implementar productor Kafka y dispatcher Lambda reales.
 5. Crear notebook de prueba en Colab para ejecutar todo el pipeline con imagen real y `plots_show=True`.
+6. Revisar si `_N_PATCHES=8` y los hiperparametros de `CurvePatchStage` necesitan ajuste con imagenes reales.
