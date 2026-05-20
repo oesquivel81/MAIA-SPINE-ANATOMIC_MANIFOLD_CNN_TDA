@@ -1,2 +1,42 @@
 # Ignore oversized local Colab notebook artifact
 back/resources/colab/PIPELINE_COMPLETE_2_CNN_OLD_SHARDS_REGIONIDX_FROM_YLABEL_FAST_20E_BS64.ipynb
+
+# ── Python cache & compiled bytecode ───────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# ── Binarios / compilados de extensiones C ──────────────────────────────────
+*.so
+*.pyd
+*.dll
+*.dylib
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+
+# ── Entornos virtuales ───────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+.env
+
+# ── Artefactos de pipeline ML (runtime, no versionados) ─────────────────────
+back/pipeline_ml_artifacts/
+back/pipeline_ml/outputs/
+back/docs/normalization_traceability_runtime/
+
+# ── Cobertura / testing ──────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ── IDEs ─────────────────────────────────────────────────────────────────────
+.idea/
+*.swp
+*.swo
+
+# NOTA: la carpeta experiments/ NO está listada aquí → se versiona completa.
