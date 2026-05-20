@@ -6,13 +6,13 @@ from app.api.v1.router import api_v1_router
 from app.core.config import get_settings
 from app.core.container import get_container
 
+settings = get_settings()
+
 logging.basicConfig(
-    level=logging.DEBUG,
+	level=logging.DEBUG if settings.normalization_debug_enabled else logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
-
-settings = get_settings()
 
 app = FastAPI(title=settings.app_name)
 app.include_router(api_v1_router, prefix="/api/v1")

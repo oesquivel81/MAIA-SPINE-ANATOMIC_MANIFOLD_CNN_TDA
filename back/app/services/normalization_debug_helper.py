@@ -15,6 +15,14 @@ async def debug_normalize_from_paths(
     profile_source: str | None = None,
     compare_image_path: str | Path | None = None,
     compare_profile_json_path: str | Path | None = None,
+    trace_patient_name: str | None = None,
+    trace_patient_lastname: str | None = None,
+    trace_sex: str | None = None,
+    trace_age: int | None = None,
+    trace_weight: float | None = None,
+    trace_timestamp: str | None = None,
+    debug_save_json: bool | None = None,
+    trace_generate_visualization: bool | None = None,
 ) -> dict[str, Any]:
     container = get_container()
     service = container.normalization_service()
@@ -23,6 +31,14 @@ async def debug_normalize_from_paths(
         profile_source=profile_source,
         compare_image_path=compare_image_path,
         compare_profile_json_path=compare_profile_json_path,
+        trace_patient_name=trace_patient_name,
+        trace_patient_lastname=trace_patient_lastname,
+        trace_sex=trace_sex,
+        trace_age=trace_age,
+        trace_weight=trace_weight,
+        trace_timestamp=trace_timestamp,
+        debug_save_json=debug_save_json,
+        trace_generate_visualization=trace_generate_visualization,
     )
 
 

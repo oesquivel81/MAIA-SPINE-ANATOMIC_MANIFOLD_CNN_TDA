@@ -26,6 +26,7 @@ class NormalizationResponse(BaseModel):
     output_image_base64: str
     runtime_metadata: dict[str, dict[str, float | int | str | bool | list[int] | None]]
     comparison: ComparisonResponse | None = None
+    traceability: dict[str, float | int | str | bool | list[str] | None] | None = None
 
 
 class ProfileStorageStatusResponse(BaseModel):
