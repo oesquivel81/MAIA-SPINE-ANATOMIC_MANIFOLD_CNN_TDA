@@ -1,3 +1,0 @@
-artifact_name,category,source,reason
-export_manifest.json,02_student_1ch_4heads,/content/drive/MyDrive/TDA_PIPELINE/STUDENT_1CH_MULTIHEAD_FULL_EXPORTS/student_1ch_multihead_ALL_FINETUNES_CHECKOUTS_20260520_004121/export_manifest.json,source no existe
-S_100_reconstruction,05_reconstruction_examples,/content/PATIENT_RECONSTRUCTED_PREDICTIONS_FROM_PATCHES/patients/S_100,reconstrucción no existe
