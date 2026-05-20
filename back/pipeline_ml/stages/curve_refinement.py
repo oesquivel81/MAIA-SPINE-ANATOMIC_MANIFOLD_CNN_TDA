@@ -212,6 +212,7 @@ class CurveRefinementStage(PipelineStage):
                 prior_ys, prior_xs, dp_ys, dp_xs, dp_heatmap, dp_mask,
             )
             self._show_curve_heatmap(img01, prior_ys, prior_xs, dp_ys, dp_xs, dp_heatmap, dp_mask)
+            self._show_curve_csv(str(csv_path), dp_ys, dp_xs)
 
         # --- 6. Actualizar payload ---
         payload["dp_ys"] = dp_ys
@@ -545,5 +546,88 @@ class CurveRefinementStage(PipelineStage):
         axes[1, 2].axis("off")
 
         fig.suptitle("CurveRefinementStage — Curva DP y heatmap", fontsize=12)
+        plt.tight_layout()
+        plt.show()
+
+    @staticmethod
+    def _show_curve_csv(
+        csv_path: str,
+        dp_ys: np.ndarray,
+        dp_xs: np.ndarray,
+    ) -> None:
+        """Muestra el contenido del CSV de la curva DP en modo debug.
+
+        Panel izquierdo: scatter de la curva completa (x vs y).
+        Panel derecho:   tabla matplotlib con head(8) + … + tail(8).
+        Ademas imprime describe() y head/tail completo en stdout.
+        """
+        import matplotlib.pyplot as plt  # lazy import
+        import pandas as pd              # lazy import
+
+        df = pd.read_csv(csv_path)
+        n = len(df)
+
+        # --- Print en stdout (siempre visible en Colab) ---
+        sep = "=" * 60
+        print(f"\n{sep}")
+        print(f"  curve_dp_centerline.csv  —  {n} puntos")
+        print(sep)
+        print(f"  Ruta : {csv_path}")
+        print(f"  Shape: {df.shape}    Columnas: {list(df.columns)}")
+        print(f"\n{df.describe().to_string()}")
+        print(f"\n  Primeras 10 filas:")
+        print(df.head(10).to_string(index=False))
+        print(f"\n  Últimas 10 filas:")
+        print(df.tail(10).to_string(index=False))
+        print(f"{sep}\n")
+
+        # --- Figura matplotlib ---
+        col_labels = list(df.columns)
+        head_rows = [
+            [str(round(v, 2)) if isinstance(v, float) else str(v) for v in row]
+            for row in df.head(8)[col_labels].itertuples(index=False)
+        ]
+        tail_rows = [
+            [str(round(v, 2)) if isinstance(v, float) else str(v) for v in row]
+            for row in df.tail(8)[col_labels].itertuples(index=False)
+        ]
+        table_data = head_rows + [["..."] * len(col_labels)] + tail_rows
+
+        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+
+        # Scatter curva completa
+        sc = axes[0].scatter(
+            df["x"], df["y"], s=2,
+            c=df["y"], cmap="viridis", alpha=0.8,
+        )
+        plt.colorbar(sc, ax=axes[0], label="fila (y)")
+        axes[0].set_title(
+            f"Scatter curva DP  ({n} pts)\n"
+            f"x ∈ [{df['x'].min():.1f}, {df['x'].max():.1f}]  "
+            f"y ∈ [{int(df['y'].min())}, {int(df['y'].max())}]",
+            fontsize=9,
+        )
+        axes[0].set_xlabel("x  (columna píxel)", fontsize=8)
+        axes[0].set_ylabel("y  (fila píxel)", fontsize=8)
+        axes[0].invert_yaxis()
+        axes[0].grid(True, alpha=0.3)
+
+        # Tabla head + ... + tail
+        axes[1].axis("off")
+        tbl = axes[1].table(
+            cellText=table_data,
+            colLabels=col_labels,
+            loc="center",
+            cellLoc="center",
+        )
+        tbl.auto_set_font_size(False)
+        tbl.set_fontsize(8)
+        tbl.scale(1.2, 1.3)
+        axes[1].set_title(
+            f"CSV head(8) + … + tail(8)\n{csv_path.split('/')[-1]}",
+            fontsize=9,
+        )
+
+        fig.suptitle("CurveRefinementStage — Contenido CSV curva DP", fontsize=11)
         plt.tight_layout()
         plt.show()
