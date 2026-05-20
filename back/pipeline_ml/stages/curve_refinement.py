@@ -211,6 +211,7 @@ class CurveRefinementStage(PipelineStage):
                 curve_bonus, likelihood_final,
                 prior_ys, prior_xs, dp_ys, dp_xs, dp_heatmap, dp_mask,
             )
+            self._show_curve_heatmap(img01, prior_ys, prior_xs, dp_ys, dp_xs, dp_heatmap, dp_mask)
 
         # --- 6. Actualizar payload ---
         payload["dp_ys"] = dp_ys
@@ -486,5 +487,63 @@ class CurveRefinementStage(PipelineStage):
         fig.suptitle(
             "CurveRefinementStage — Pipeline de refinamiento espinal", fontsize=12
         )
+        plt.tight_layout()
+        plt.show()
+
+    @staticmethod
+    def _show_curve_heatmap(
+        img01: np.ndarray,
+        prior_ys: np.ndarray,
+        prior_xs: np.ndarray,
+        dp_ys: np.ndarray,
+        dp_xs: np.ndarray,
+        dp_heatmap: np.ndarray,
+        dp_mask: np.ndarray,
+    ) -> None:
+        """Grid 2×3 detallado de la curva DP y su heatmap."""
+        import matplotlib.pyplot as plt  # lazy import
+
+        fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+
+        # ---- Fila 0: heatmap y máscara ----
+        axes[0, 0].imshow(dp_heatmap, cmap="hot")
+        axes[0, 0].set_title(
+            f"Heatmap DP\nmin={dp_heatmap.min():.3f}  max={dp_heatmap.max():.3f}",
+            fontsize=9,
+        )
+        axes[0, 0].axis("off")
+
+        axes[0, 1].imshow(dp_mask, cmap="gray")
+        axes[0, 1].set_title(
+            f"Máscara DP (thr={_HEATMAP_THRESHOLD})\ncoverage={dp_mask.mean() * 100:.2f}%",
+            fontsize=9,
+        )
+        axes[0, 1].axis("off")
+
+        axes[0, 2].imshow(img01, cmap="gray")
+        axes[0, 2].imshow(dp_heatmap, cmap="hot", alpha=0.6)
+        axes[0, 2].set_title("Imagen + heatmap DP", fontsize=9)
+        axes[0, 2].axis("off")
+
+        # ---- Fila 1: curvas sobre imagen ----
+        axes[1, 0].imshow(img01, cmap="gray")
+        axes[1, 0].plot(prior_xs, prior_ys, color="cyan", linewidth=1.5)
+        axes[1, 0].set_title(f"Curva previa (centerline)\n{len(prior_ys)} pts", fontsize=9)
+        axes[1, 0].axis("off")
+
+        axes[1, 1].imshow(img01, cmap="gray")
+        axes[1, 1].plot(dp_xs, dp_ys, color="lime", linewidth=2)
+        axes[1, 1].set_title(f"Curva refinada DP\n{len(dp_ys)} pts", fontsize=9)
+        axes[1, 1].axis("off")
+
+        axes[1, 2].imshow(img01, cmap="gray")
+        axes[1, 2].imshow(dp_heatmap, cmap="hot", alpha=0.45)
+        axes[1, 2].plot(prior_xs, prior_ys, color="cyan", linewidth=1.5, label="previa")
+        axes[1, 2].plot(dp_xs, dp_ys, color="lime", linewidth=2, label="DP")
+        axes[1, 2].legend(loc="upper right", fontsize=7)
+        axes[1, 2].set_title("Overlay completo\n(imagen + heatmap + curvas)", fontsize=9)
+        axes[1, 2].axis("off")
+
+        fig.suptitle("CurveRefinementStage — Curva DP y heatmap", fontsize=12)
         plt.tight_layout()
         plt.show()
