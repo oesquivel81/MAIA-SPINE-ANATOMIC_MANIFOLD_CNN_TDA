@@ -11,6 +11,7 @@ from pipeline_ml.context import AssetBundle, PipelineContext, PipelineResult
 from pipeline_ml.logger import PipelineLogger, timed_step
 from pipeline_ml.outputs import EventBridge, LocalOutputWriter, MongoMetricsWriter, S3OutputWriter
 from pipeline_ml.stages import (
+    BinaryCurveStage,
     IngestionStage,
     InferenceStage,
     PersistenceStage,
@@ -65,6 +66,7 @@ class PipelineML:
         self.stages = [
             IngestionStage(),
             PreprocessingStage(),
+            BinaryCurveStage(),
             InferenceStage(),
             PostprocessingStage(),
             PersistenceStage(),
@@ -83,6 +85,7 @@ class PipelineML:
         context.metadata["patient_json_profiles_dir"] = self.config.paths.patient_json_profiles_dir
         context.metadata["redis_url"] = self.config.paths.redis_url
         context.metadata["plots_show"] = self.config.debug.plots_show
+        context.metadata["binary_curve_model_path"] = self.config.paths.binary_curve_model_path
 
         payload: dict[str, Any] = {"image": image, "request_id": req_id}
 

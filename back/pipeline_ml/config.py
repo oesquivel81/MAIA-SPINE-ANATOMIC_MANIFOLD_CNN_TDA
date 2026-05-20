@@ -42,6 +42,10 @@ class PipelinePaths:
     # Ruta relativa se resuelve desde cwd (en Colab: /content/resources/NORMALIZATION_PROFILES/patient_json_profiles)
     patient_json_profiles_dir: str = "resources/NORMALIZATION_PROFILES/patient_json_profiles"
 
+    # Ruta al checkpoint del CNN binario/curva (FastBinaryCurveUNet).
+    # Ejemplo: /content/experiments/pipeline_model/01_binary_curve_cnn/best_binary_curve_model.pt
+    binary_curve_model_path: str = ""
+
     # URL de Redis para backup del trace (opcional, best-effort)
     # Ejemplo: redis://localhost:6379/0
     redis_url: str = ""
