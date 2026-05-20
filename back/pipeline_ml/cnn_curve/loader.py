@@ -45,7 +45,7 @@ def load_binary_curve_model(
     else:
         device = torch.device(device)
 
-    ckpt = torch.load(path, map_location=device)
+    ckpt = torch.load(path, map_location=device, weights_only=False)
 
     if "model_state_dict" not in ckpt:
         raise KeyError(
