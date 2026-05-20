@@ -1,0 +1,14 @@
+{
+  "created_at": "2026-05-19T18:52:06.836816",
+  "repo_root": "/content/MAIA-SPINE-ANATOMIC_MANIFOLD_CNN_TDA",
+  "pipeline_model_dir": "/content/MAIA-SPINE-ANATOMIC_MANIFOLD_CNN_TDA/experiments/pipeline_model",
+  "schema": {
+    "01_binary_curve_cnn": "CNN independiente para máscara binaria y curva.",
+    "02_student_10ch_first_cnn": "Student asociado a la primera CNN/pipeline de 10 canales.",
+    "03_regional_patch_cnn": "CNN regional por patches anatómicos.",
+    "04_clustering_tda": "Modelos y tablas de clustering/TDA con gaps, peaks y vectores indexados.",
+    "05_reconstruction_examples": "Ejemplos de reconstrucción global desde patches."
+  },
+  "n_files": 11,
+  "total_mb": 88.26768684387207
+}

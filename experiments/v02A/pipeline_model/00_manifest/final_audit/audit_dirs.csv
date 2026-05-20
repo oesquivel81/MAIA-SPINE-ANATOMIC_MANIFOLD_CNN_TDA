@@ -1,0 +1,7 @@
+section,exists,n_files,total_mb,path
+00_manifest,True,6,0.014315605163574219,/content/MAIA-SPINE-ANATOMIC_MANIFOLD_CNN_TDA/experiments/v02A/pipeline_model/00_manifest
+01_binary_curve_cnn,True,5,25.083858489990234,/content/MAIA-SPINE-ANATOMIC_MANIFOLD_CNN_TDA/experiments/v02A/pipeline_model/01_binary_curve_cnn
+02_student_1ch_4heads,True,4,5.744696617126465,/content/MAIA-SPINE-ANATOMIC_MANIFOLD_CNN_TDA/experiments/v02A/pipeline_model/02_student_1ch_4heads
+03_cnn_10ch_multitask,True,6,118.77448654174805,/content/MAIA-SPINE-ANATOMIC_MANIFOLD_CNN_TDA/experiments/v02A/pipeline_model/03_cnn_10ch_multitask
+04_clustering_tda,True,6,28.89443016052246,/content/MAIA-SPINE-ANATOMIC_MANIFOLD_CNN_TDA/experiments/v02A/pipeline_model/04_clustering_tda
+05_reconstruction_examples,True,0,0.0,/content/MAIA-SPINE-ANATOMIC_MANIFOLD_CNN_TDA/experiments/v02A/pipeline_model/05_reconstruction_examples

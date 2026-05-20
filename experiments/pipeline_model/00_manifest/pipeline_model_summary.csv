@@ -1,0 +1,10 @@
+category,suffix,n,total_mb
+01_binary_curve_cnn,.csv,4,0.10611915588378906
+01_binary_curve_cnn,.joblib,1,0.016280174255371094
+01_binary_curve_cnn,.json,2,0.0034437179565429688
+01_binary_curve_cnn,.png,1,21.22055721282959
+01_binary_curve_cnn,.pt,7,55.71886730194092
+03_clustering,.csv,4,1.2566070556640625
+03_clustering,.joblib,2,27.6378231048584
+04_tda,.pt,1,29.682303428649902
+05_old_regional_cnn,.pt,1,29.682303428649902
