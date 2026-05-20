@@ -5,6 +5,7 @@ from .binary_curve import BinaryCurveStage
 from .curve_refinement import CurveRefinementStage
 from .curve_patch import CurvePatchStage
 from .student_patch import StudentPatchStage
+from .patch_reconstruction import PatchReconstructionStage
 from .inference import InferenceStage
 from .postprocessing import PostprocessingStage
 from .persistence import PersistenceStage
@@ -17,6 +18,7 @@ __all__ = [
     "CurveRefinementStage",
     "CurvePatchStage",
     "StudentPatchStage",
+    "PatchReconstructionStage",
     "InferenceStage",
     "PostprocessingStage",
     "PersistenceStage",
