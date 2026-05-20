@@ -35,7 +35,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: 847964925141.dkr.ecr.us-east-1.amazonaws.com/maia-dev-ecr:frontend-latest
+          image: nginx:1.27-alpine
           imagePullPolicy: Always
           ports:
             - containerPort: 80
