@@ -86,6 +86,17 @@ class PipelineConfig:
     paths: PipelinePaths = field(default_factory=PipelinePaths)
 
     @classmethod
+    def _build_dataclass_from_dict(cls, dataclass_type, values: dict):
+        """
+        Helper: Create dataclass instance filtering kwargs to allowed fields.
+        Ignores extra keys not defined in the dataclass to handle schema evolution.
+        """
+        from dataclasses import fields
+        allowed_fields = {f.name for f in fields(dataclass_type)}
+        filtered = {k: v for k, v in values.items() if k in allowed_fields}
+        return dataclass_type(**filtered)
+
+    @classmethod
     def from_json_file(cls, config_file: str | None) -> "PipelineConfig":
         if not config_file:
             return cls()
@@ -96,8 +107,16 @@ class PipelineConfig:
 
         data = json.loads(path.read_text(encoding="utf-8"))
 
-        debug = _from_dict(DebugFlags, data.get("debug", {}))
-        routing = _from_dict(RoutingFlags, data.get("routing", {}))
-        paths_cfg = _from_dict(PipelinePaths, data.get("paths", {}))
+        # Handle legacy Colab configs: migrate debug.write_local_artifacts -> routing.write_local_artifacts
+        debug_cfg = data.get("debug", {})
+        routing_cfg = data.get("routing", {})
+
+        if "write_local_artifacts" in debug_cfg and "write_local_artifacts" not in routing_cfg:
+            routing_cfg["write_local_artifacts"] = debug_cfg.pop("write_local_artifacts")
+
+        # Use filtered construction to ignore unknown fields in legacy configs
+        debug = cls._build_dataclass_from_dict(DebugFlags, debug_cfg)
+        routing = cls._build_dataclass_from_dict(RoutingFlags, routing_cfg)
+        paths_cfg = cls._build_dataclass_from_dict(PipelinePaths, data.get("paths", {}))
 
         return cls(debug=debug, routing=routing, paths=paths_cfg)
