@@ -10,6 +10,7 @@ from app.components.redis_client import RedisComponent
 from app.core.config import Settings
 from motor.motor_asyncio import AsyncIOMotorCollection
 from redis.asyncio import Redis
+from pipeline_ml.normalization_stage.logger import log_method_start
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,7 @@ class NormalizationProfileLoader:
         return self._settings.normalization_profile_source.lower()
 
     async def load_profiles_to_redis(self) -> int:
+        log_method_start(logger, self.__class__.__name__, "load_profiles_to_redis")
         logger.info(f"Iniciando carga de perfiles a Redis desde {self._profiles_dir}")
         profiles = self._read_profile_index_jsonl()
         logger.debug(f"Se leyeron {len(profiles)} perfiles del archivo JSONL")
@@ -57,6 +59,7 @@ class NormalizationProfileLoader:
         return len(profiles)
 
     async def get_profiles(self, source: str | None = None) -> list[dict[str, Any]]:
+        log_method_start(logger, self.__class__.__name__, "get_profiles", source=source)
         selected_source = (source or self.default_source).lower()
         logger.debug(f"Obteniendo perfiles desde fuente: {selected_source}")
         if selected_source == "json":
@@ -72,6 +75,7 @@ class NormalizationProfileLoader:
         raise ValueError(f"Fuente de perfiles no soportada: {selected_source}")
 
     async def load_profiles_to_mongo(self) -> int:
+        log_method_start(logger, self.__class__.__name__, "load_profiles_to_mongo")
         logger.info(f"Iniciando carga de perfiles a Mongo en colección '{self._settings.mongo_profiles_collection}'")
         profiles = self._read_profile_index_jsonl()
         logger.debug(f"Se leyeron {len(profiles)} perfiles del archivo JSONL para Mongo")
@@ -92,6 +96,7 @@ class NormalizationProfileLoader:
         return len(profiles)
 
     async def get_storage_status(self, sample_size: int = 5) -> dict[str, Any]:
+        log_method_start(logger, self.__class__.__name__, "get_storage_status", sample_size=sample_size)
         logger.debug(f"Consultando estado de almacenamiento de perfiles (sample_size={sample_size})")
         source_records = self._read_profile_index_jsonl()
         source_keys = [str(item.get("patient_key", "unknown")) for item in source_records[:sample_size]]
@@ -127,6 +132,7 @@ class NormalizationProfileLoader:
         }
 
     async def _read_profiles_from_redis(self) -> list[dict[str, Any]]:
+        log_method_start(logger, self.__class__.__name__, "_read_profiles_from_redis")
         logger.debug(f"Intentando leer perfiles de Redis (clave: {self.PROFILE_INDEX_KEY})")
         raw = await self.redis_client.get(self.PROFILE_INDEX_KEY)
         if raw is None:
@@ -146,6 +152,7 @@ class NormalizationProfileLoader:
         return profiles
 
     async def _read_profiles_from_mongo(self) -> list[dict[str, Any]]:
+        log_method_start(logger, self.__class__.__name__, "_read_profiles_from_mongo")
         logger.debug(f"Intentando leer perfiles de Mongo (colección: {self._settings.mongo_profiles_collection})")
         docs = await self.mongo_collection.find({}).to_list(length=None)
         if not docs:
@@ -161,6 +168,7 @@ class NormalizationProfileLoader:
         return profiles
 
     def _read_profile_index_jsonl(self) -> list[dict[str, Any]]:
+        log_method_start(logger, self.__class__.__name__, "_read_profile_index_jsonl")
         logger.debug(f"Leyendo índice de perfiles desde {self._index_jsonl}")
         if not self._index_jsonl.exists():
             logger.error(f"Archivo de índice no encontrado: {self._index_jsonl}")

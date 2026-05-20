@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -9,17 +10,27 @@ import cv2
 import numpy as np
 from fastapi import HTTPException, UploadFile
 
+from app.core.config import Settings
 from app.services.normalization_profile_loader import NormalizationProfileLoader
-from app.services.piplein import (
-    NormalizationPipelineContext,
-    build_ordered_pipeline,
-    wire_pipeline_chain,
-)
+from pipeline_ml.normalization_stage.dynamic_engine import DynamicNormalizationEngine
+from pipeline_ml.normalization_stage.logger import log_method_start
+from pipeline_ml.normalization_stage.traceability import NormalizationTraceabilityService
+
+logger = logging.getLogger(__name__)
 
 
 class NormalizationService:
-    def __init__(self, profile_loader: NormalizationProfileLoader):
+    def __init__(
+        self,
+        profile_loader: NormalizationProfileLoader,
+        settings: Settings,
+        dynamic_engine: DynamicNormalizationEngine,
+        traceability_service: NormalizationTraceabilityService,
+    ):
         self._profile_loader = profile_loader
+        self._settings = settings
+        self._dynamic_engine = dynamic_engine
+        self._traceability_service = traceability_service
         
     async def normalize_bytes(
         self,
@@ -27,13 +38,35 @@ class NormalizationService:
         profile_source: str | None = None,
         compare_content: bytes | None = None,
         compare_profile_payload: dict[str, Any] | None = None,
+        trace_patient_name: str | None = None,
+        trace_patient_lastname: str | None = None,
+        trace_sex: str | None = None,
+        trace_age: int | None = None,
+        trace_weight: float | None = None,
+        trace_timestamp: str | None = None,
+        debug_save_json: bool | None = None,
+        trace_generate_visualization: bool | None = None,
     ) -> dict[str, Any]:
+        log_method_start(
+            logger,
+            self.__class__.__name__,
+            "normalize_bytes",
+            profile_source=profile_source,
+        )
         image = self._decode_grayscale(content)
         return await self._normalize_array(
             image=image,
             profile_source=profile_source,
             compare_image=self._decode_grayscale(compare_content) if compare_content is not None else None,
             compare_profile_payload=compare_profile_payload,
+            trace_patient_name=trace_patient_name,
+            trace_patient_lastname=trace_patient_lastname,
+            trace_sex=trace_sex,
+            trace_age=trace_age,
+            trace_weight=trace_weight,
+            trace_timestamp=trace_timestamp,
+            debug_save_json=debug_save_json,
+            trace_generate_visualization=trace_generate_visualization,
         )
     
     async def normalize_file_paths(
@@ -42,7 +75,22 @@ class NormalizationService:
         profile_source: str | None = None,
         compare_image_path: str | Path | None = None,
         compare_profile_json_path: str | Path | None = None,
+        trace_patient_name: str | None = None,
+        trace_patient_lastname: str | None = None,
+        trace_sex: str | None = None,
+        trace_age: int | None = None,
+        trace_weight: float | None = None,
+        trace_timestamp: str | None = None,
+        debug_save_json: bool | None = None,
+        trace_generate_visualization: bool | None = None,
     ) -> dict[str, Any]:
+        log_method_start(
+            logger,
+            self.__class__.__name__,
+            "normalize_file_paths",
+            image_path=str(image_path),
+            profile_source=profile_source,
+        )
         image_bytes = Path(image_path).read_bytes()
         compare_bytes = None
         compare_profile_payload = None
@@ -58,6 +106,14 @@ class NormalizationService:
             profile_source=profile_source,
             compare_content=compare_bytes,
             compare_profile_payload=compare_profile_payload,
+            trace_patient_name=trace_patient_name,
+            trace_patient_lastname=trace_patient_lastname,
+            trace_sex=trace_sex,
+            trace_age=trace_age,
+            trace_weight=trace_weight,
+            trace_timestamp=trace_timestamp,
+            debug_save_json=debug_save_json,
+            trace_generate_visualization=trace_generate_visualization,
         )
 
     def visualize_normalization(
@@ -66,6 +122,7 @@ class NormalizationService:
         normalized: np.ndarray,
         compare_normalized: np.ndarray | None = None,
     ) -> np.ndarray:
+        log_method_start(logger, self.__class__.__name__, "visualize_normalization")
         return self._build_visualization(original, normalized, compare_normalized)
 
     async def normalize_image(
@@ -74,7 +131,22 @@ class NormalizationService:
         profile_source: str | None = None,
         compare_file: UploadFile | None = None,
         compare_profile_json: UploadFile | None = None,
+        trace_patient_name: str | None = None,
+        trace_patient_lastname: str | None = None,
+        trace_sex: str | None = None,
+        trace_age: int | None = None,
+        trace_weight: float | None = None,
+        trace_timestamp: str | None = None,
+        debug_save_json: bool | None = None,
+        trace_generate_visualization: bool | None = None,
     ) -> dict[str, Any]:
+        log_method_start(
+            logger,
+            self.__class__.__name__,
+            "normalize_image",
+            filename=file.filename,
+            profile_source=profile_source,
+        )
         raw = await file.read()
         compare_raw = await compare_file.read() if compare_file is not None else None
         compare_profile_payload = (
@@ -87,6 +159,14 @@ class NormalizationService:
             profile_source=profile_source,
             compare_content=compare_raw,
             compare_profile_payload=compare_profile_payload,
+            trace_patient_name=trace_patient_name,
+            trace_patient_lastname=trace_patient_lastname,
+            trace_sex=trace_sex,
+            trace_age=trace_age,
+            trace_weight=trace_weight,
+            trace_timestamp=trace_timestamp,
+            debug_save_json=debug_save_json,
+            trace_generate_visualization=trace_generate_visualization,
         )
 
     async def _normalize_array(
@@ -95,14 +175,23 @@ class NormalizationService:
         profile_source: str | None = None,
         compare_image: np.ndarray | None = None,
         compare_profile_payload: dict[str, Any] | None = None,
+        trace_patient_name: str | None = None,
+        trace_patient_lastname: str | None = None,
+        trace_sex: str | None = None,
+        trace_age: int | None = None,
+        trace_weight: float | None = None,
+        trace_timestamp: str | None = None,
+        debug_save_json: bool | None = None,
+        trace_generate_visualization: bool | None = None,
     ) -> dict[str, Any]:
+        log_method_start(logger, self.__class__.__name__, "_normalize_array")
         input_stats = self._compute_stats(image)
 
         selected_profile_source = (profile_source or self._profile_loader.default_source).lower()
         profiles = await self._get_profiles(selected_profile_source)
-        closest_profile, distance = self._find_closest_profile(input_stats, profiles)
+        closest_profile, distance = self._dynamic_engine.select_closest_profile(input_stats, profiles)
 
-        normalized, ordered_map, context = await self._run_pipeline(image, closest_profile, distance)
+        normalized, ordered_map, context = await self._dynamic_engine.run(image, closest_profile, distance)
         output_stats = self._compute_stats(normalized)
         output_base64 = self._encode_png_base64(normalized)
 
@@ -114,7 +203,7 @@ class NormalizationService:
             profiles=profiles,
         )
 
-        return {
+        response_payload = {
             "profile_source": selected_profile_source,
             "implementation_map": list(ordered_map.keys()),
             "closest_profile_key": str(closest_profile.get("patient_key", "unknown")),
@@ -135,26 +224,57 @@ class NormalizationService:
             "comparison": comparison,
         }
 
+        if self._settings.normalization_traceability_enabled:
+            should_generate_visualization = (
+                self._settings.normalization_trace_visualization_enabled
+                if trace_generate_visualization is None
+                else bool(trace_generate_visualization)
+            )
+
+            visualization_image = None
+            if should_generate_visualization:
+                visualization_image = self.visualize_normalization(image, normalized)
+
+            trace_identity = self._traceability_service.build_identity(
+                patient_name=trace_patient_name,
+                patient_lastname=trace_patient_lastname,
+                sex=trace_sex,
+                age=trace_age,
+                weight=trace_weight,
+                timestamp=trace_timestamp,
+            )
+            trace_payload = {
+                "profile_source": selected_profile_source,
+                "closest_profile_key": str(closest_profile.get("patient_key", "unknown")),
+                "closest_profile_distance": float(distance),
+                "closest_profile_summary": response_payload["closest_profile_summary"],
+                "input_stats": input_stats,
+                "output_stats": output_stats,
+                "output_shape": [int(normalized.shape[0]), int(normalized.shape[1])],
+                "trace_patient_name": trace_patient_name,
+                "trace_patient_lastname": trace_patient_lastname,
+                "trace_sex": trace_sex,
+                "trace_age": trace_age,
+                "trace_weight": trace_weight,
+            }
+            trace_info = await self._traceability_service.persist_trace(
+                identity=trace_identity,
+                payload=trace_payload,
+                save_json=self._settings.normalization_debug_save_json if debug_save_json is None else bool(debug_save_json),
+                normalized_image=normalized,
+                visualization_image=visualization_image,
+                generate_visualization=should_generate_visualization,
+            )
+            response_payload["traceability"] = trace_info
+
+        return response_payload
+
     async def _get_profiles(self, profile_source: str) -> list[dict[str, Any]]:
+        log_method_start(logger, self.__class__.__name__, "_get_profiles", profile_source=profile_source)
         try:
             return await self._profile_loader.get_profiles(profile_source)
         except (ValueError, FileNotFoundError, json.JSONDecodeError) as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
-
-    async def _run_pipeline(
-        self,
-        image: np.ndarray,
-        closest_profile: dict[str, Any],
-        distance: float,
-    ) -> tuple[np.ndarray, dict[str, Any], NormalizationPipelineContext]:
-        ordered_map = build_ordered_pipeline()
-        chain_head = wire_pipeline_chain(ordered_map)
-        context = NormalizationPipelineContext(
-            closest_profile=closest_profile,
-            closest_profile_distance=distance,
-        )
-        normalized = await chain_head.process(image, context)
-        return normalized, ordered_map, context
 
     async def _build_comparison_payload(
         self,
@@ -181,10 +301,10 @@ class NormalizationService:
             compare_profile = self._profile_from_runtime_json(compare_profile_payload)
             compare_profile_source = "uploaded_json"
         else:
-            compare_profile, compare_distance = self._find_closest_profile(compare_input_stats, profiles)
+            compare_profile, compare_distance = self._dynamic_engine.select_closest_profile(compare_input_stats, profiles)
             compare_profile_payload = compare_profile
 
-        compare_output, _, _ = await self._run_pipeline(
+        compare_output, _, _ = await self._dynamic_engine.run(
             compare_image,
             compare_profile,
             compare_distance,
@@ -230,10 +350,10 @@ class NormalizationService:
             compare_profile = self._profile_from_runtime_json(compare_profile_payload)
             compare_profile_source = "uploaded_json"
         else:
-            compare_profile, compare_distance = self._find_closest_profile(compare_input_stats, profiles)
+            compare_profile, compare_distance = self._dynamic_engine.select_closest_profile(compare_input_stats, profiles)
             compare_profile_payload = compare_profile
 
-        compare_output, _, _ = await self._run_pipeline(
+        compare_output, _, _ = await self._dynamic_engine.run(
             compare_image,
             compare_profile,
             compare_distance,
@@ -340,44 +460,6 @@ class NormalizationService:
             return float(value)
         except (TypeError, ValueError):
             return fallback
-
-    def _find_closest_profile(
-        self,
-        input_stats: dict[str, float],
-        profiles: list[dict[str, Any]],
-    ) -> tuple[dict[str, Any], float]:
-        weights = {
-            "before_mean": 1.0,
-            "before_std": 1.0,
-            "before_median": 0.7,
-            "before_p5": 0.5,
-            "before_p95": 0.5,
-            "aspect_ratio": 1.2,
-        }
-        metric_map = {
-            "before_mean": input_stats["mean"],
-            "before_std": input_stats["std"],
-            "before_median": input_stats["median"],
-            "before_p5": input_stats["p5"],
-            "before_p95": input_stats["p95"],
-            "aspect_ratio": input_stats["aspect_ratio"],
-        }
-
-        best_profile = profiles[0]
-        best_distance = float("inf")
-
-        for profile in profiles:
-            distance = 0.0
-            for field, input_value in metric_map.items():
-                profile_value = self._safe_float(profile.get(field), input_value)
-                norm = max(abs(profile_value), 1.0)
-                distance += weights[field] * (abs(input_value - profile_value) / norm)
-
-            if distance < best_distance:
-                best_distance = distance
-                best_profile = profile
-
-        return best_profile, float(best_distance)
 
     @staticmethod
     def _encode_png_base64(image: np.ndarray) -> str:
