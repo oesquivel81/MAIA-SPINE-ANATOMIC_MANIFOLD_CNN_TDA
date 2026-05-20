@@ -126,6 +126,9 @@ class BinaryCurveStage(PipelineStage):
 
         # --- 6. Visualización (solo si plots_show=True) ---
         if context.metadata.get("plots_show", False):
+            self._show_image(image, title="Imagen normalizada → entrada CNN")
+            self._show_mask(binary_mask, title="Máscara binaria (salida CNN)", cmap="gray")
+            self._show_mask(curve_mask,  title="Máscara de curva  (salida CNN)", cmap="hot")
             self._compare_masks(image, binary_mask, curve_mask)
 
         # --- 7. Actualizar payload ---
@@ -226,27 +229,134 @@ class BinaryCurveStage(PipelineStage):
         return path
 
     @staticmethod
+    def _show_image(image: np.ndarray, title: str = "Imagen de entrada CNN") -> None:
+        """
+        Muestra la imagen de entrada (escala de grises) con sus estadísticas.
+        Solo se invoca cuando plots_show=True.
+        """
+        import matplotlib.pyplot as plt  # lazy import
+
+        gray = image if image.ndim == 2 else cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        arr = gray.astype(np.float32)
+
+        stats_lines = [
+            f"shape={gray.shape}  dtype={gray.dtype}",
+            f"mean={arr.mean():.2f}  std={arr.std():.2f}",
+            f"min={arr.min():.0f}  max={arr.max():.0f}",
+            f"p5={np.percentile(arr,5):.1f}  p95={np.percentile(arr,95):.1f}",
+        ]
+
+        fig, ax = plt.subplots(figsize=(5, 6))
+        ax.imshow(gray, cmap="gray", vmin=0, vmax=255)
+        ax.set_title(title, fontsize=11, pad=10)
+        ax.axis("off")
+        fig.text(
+            0.5, 0.02,
+            "\n".join(stats_lines),
+            ha="center", va="bottom",
+            fontsize=8,
+            family="monospace",
+            bbox=dict(boxstyle="round,pad=0.4", fc="#f5f5f5", ec="#cccccc"),
+        )
+        plt.tight_layout(rect=[0, 0.12, 1, 1])
+        plt.show()
+
+    @staticmethod
+    def _show_mask(mask: np.ndarray, title: str, cmap: str = "gray") -> None:
+        """
+        Muestra una máscara binaria {0,1} con sus estadísticas de cobertura.
+        Solo se invoca cuando plots_show=True.
+        """
+        import matplotlib.pyplot as plt  # lazy import
+
+        coverage = mask.mean() * 100
+        n_pixels = int(mask.sum())
+        total = mask.size
+
+        stats_lines = [
+            f"shape={mask.shape}  dtype={mask.dtype}",
+            f"coverage={coverage:.2f}%  ({n_pixels:,} / {total:,} px)",
+            f"valores únicos={np.unique(mask).tolist()}",
+        ]
+
+        fig, ax = plt.subplots(figsize=(5, 6))
+        ax.imshow(mask, cmap=cmap, vmin=0, vmax=1)
+        ax.set_title(title, fontsize=11, pad=10)
+        ax.axis("off")
+        fig.text(
+            0.5, 0.02,
+            "\n".join(stats_lines),
+            ha="center", va="bottom",
+            fontsize=8,
+            family="monospace",
+            bbox=dict(boxstyle="round,pad=0.4", fc="#f5f5f5", ec="#cccccc"),
+        )
+        plt.tight_layout(rect=[0, 0.10, 1, 1])
+        plt.show()
+
+    @staticmethod
     def _compare_masks(
         image: np.ndarray,
         binary_mask: np.ndarray,
         curve_mask: np.ndarray,
     ) -> None:
-        """Visualización inline para Colab/Jupyter (solo si plots_show=True)."""
+        """
+        Grid 1×3: imagen de entrada | máscara binaria | máscara de curva.
+        Cada panel muestra sus stats individuales.
+        Solo se invoca cuando plots_show=True.
+        """
         import matplotlib.pyplot as plt  # lazy import
 
-        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-        axes[0].imshow(image if image.ndim == 2 else cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), cmap="gray")
-        axes[0].set_title("Imagen normalizada\n(PreprocessingStage output)")
+        gray = image if image.ndim == 2 else cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        arr = gray.astype(np.float32)
+
+        fig, axes = plt.subplots(1, 3, figsize=(16, 6))
+
+        # --- Panel 0: imagen normalizada ---
+        axes[0].imshow(gray, cmap="gray", vmin=0, vmax=255)
+        axes[0].set_title(
+            "Imagen normalizada\n(PreprocessingStage output)",
+            fontsize=10,
+        )
         axes[0].axis("off")
+        axes[0].set_xlabel(
+            f"shape={gray.shape}\n"
+            f"mean={arr.mean():.1f}  std={arr.std():.1f}\n"
+            f"p5={np.percentile(arr,5):.1f}  p95={np.percentile(arr,95):.1f}",
+            fontsize=7.5,
+            labelpad=6,
+        )
 
+        # --- Panel 1: máscara binaria ---
+        b_cov = binary_mask.mean() * 100
         axes[1].imshow(binary_mask, cmap="gray", vmin=0, vmax=1)
-        axes[1].set_title(f"Máscara binaria\ncoverage={binary_mask.mean()*100:.1f}%")
+        axes[1].set_title(
+            f"Máscara binaria\ncoverage={b_cov:.1f}%",
+            fontsize=10,
+        )
         axes[1].axis("off")
+        axes[1].set_xlabel(
+            f"shape={binary_mask.shape}  dtype={binary_mask.dtype}\n"
+            f"píxeles activos={int(binary_mask.sum()):,} / {binary_mask.size:,}",
+            fontsize=7.5,
+            labelpad=6,
+        )
 
+        # --- Panel 2: máscara de curva ---
+        c_cov = curve_mask.mean() * 100
         axes[2].imshow(curve_mask, cmap="hot", vmin=0, vmax=1)
-        axes[2].set_title(f"Máscara de curva\ncoverage={curve_mask.mean()*100:.1f}%")
+        axes[2].set_title(
+            f"Máscara de curva\ncoverage={c_cov:.1f}%",
+            fontsize=10,
+        )
         axes[2].axis("off")
+        axes[2].set_xlabel(
+            f"shape={curve_mask.shape}  dtype={curve_mask.dtype}\n"
+            f"píxeles activos={int(curve_mask.sum()):,} / {curve_mask.size:,}",
+            fontsize=7.5,
+            labelpad=6,
+        )
 
-        fig.suptitle("BinaryCurveStage — salida CNN", fontsize=13)
+        fig.suptitle("BinaryCurveStage — salida CNN", fontsize=13, y=1.01)
         plt.tight_layout()
         plt.show()
