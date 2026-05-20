@@ -14,6 +14,7 @@ from app.core.config import Settings
 from app.services.normalization_profile_loader import NormalizationProfileLoader
 from pipeline_ml.normalization_stage.dynamic_engine import DynamicNormalizationEngine
 from pipeline_ml.normalization_stage.logger import log_method_start
+from pipeline_ml.normalization_stage.plot_renderer import NormalizationPlotRenderer
 from pipeline_ml.normalization_stage.traceability import NormalizationTraceabilityService
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ class NormalizationService:
         self._settings = settings
         self._dynamic_engine = dynamic_engine
         self._traceability_service = traceability_service
+        self._plot_renderer = NormalizationPlotRenderer()
         
     async def normalize_bytes(
         self,
@@ -225,15 +227,13 @@ class NormalizationService:
         }
 
         if self._settings.normalization_traceability_enabled:
-            should_generate_visualization = (
-                self._settings.normalization_trace_visualization_enabled
+            # Bandera global única que controla TODOS los plots.
+            # El resto (imagen cruda, JSON, CSV, S3, etc.) siempre se genera.
+            plots_enabled = (
+                self._settings.normalization_trace_plots_enabled
                 if trace_generate_visualization is None
                 else bool(trace_generate_visualization)
             )
-
-            visualization_image = None
-            if should_generate_visualization:
-                visualization_image = self.visualize_normalization(image, normalized)
 
             trace_identity = self._traceability_service.build_identity(
                 patient_name=trace_patient_name,
@@ -243,6 +243,28 @@ class NormalizationService:
                 weight=trace_weight,
                 timestamp=trace_timestamp,
             )
+
+            # Plot de imagen normalizada — opcional (bandera global)
+            normalized_plot = None
+            if plots_enabled:
+                normalized_plot = self._plot_renderer.render_normalized_plot(
+                    normalized=normalized,
+                    stats=output_stats,
+                    profile_summary=response_payload["closest_profile_summary"],
+                    trace_id=trace_identity.trace_id,
+                )
+
+            # Plot de comparación original vs normalizado — opcional (misma bandera)
+            visualization_image = None
+            if plots_enabled:
+                visualization_image = self._plot_renderer.render_comparison_plot(
+                    original=image,
+                    normalized=normalized,
+                    input_stats=input_stats,
+                    output_stats=output_stats,
+                    profile_summary=response_payload["closest_profile_summary"],
+                )
+
             trace_payload = {
                 "profile_source": selected_profile_source,
                 "closest_profile_key": str(closest_profile.get("patient_key", "unknown")),
@@ -262,8 +284,8 @@ class NormalizationService:
                 payload=trace_payload,
                 save_json=self._settings.normalization_debug_save_json if debug_save_json is None else bool(debug_save_json),
                 normalized_image=normalized,
+                normalized_plot=normalized_plot,
                 visualization_image=visualization_image,
-                generate_visualization=should_generate_visualization,
             )
             response_payload["traceability"] = trace_info
 
