@@ -7,15 +7,6 @@ from __future__ import annotations
 
 import numpy as np
 
-# Mapas de color por cabeza del StudentUNet1CH4Heads
-# Deben coincidir con _HEAD_CMAPS en stages/student_patch.py
-_HEAD_CMAPS: dict[str, str] = {
-    "binary":         "hot",
-    "boundary":       "coolwarm",
-    "intervertebral": "viridis",
-    "ordinal":        "plasma",
-}
-
 
 def show_student_heads_consistent(
     patches_input: "np.ndarray",
@@ -24,6 +15,10 @@ def show_student_heads_consistent(
 ) -> None:
     """
     Visualiza cada parche de entrada junto con las 4 salidas del StudentUNet.
+
+    - Input:  escala de grises normal (bajo=negro, alto=blanco).
+    - Cabezas: ``gray_r`` invertido — probabilidad alta = oscuro,
+      facilitando distinguir activaciones sobre fondo claro.
 
     Args:
         patches_input: Array [N, H, W] o [N, 1, H, W] — parches en float32 [0,1].
@@ -37,12 +32,6 @@ def show_student_heads_consistent(
             }
 
         max_patches: Número máximo de parches a mostrar.
-
-    Colores por cabeza (coherentes con StudentPatchStage):
-        - binary:         hot
-        - boundary:       coolwarm
-        - intervertebral: viridis
-        - ordinal:        plasma
     """
     import matplotlib.pyplot as plt
 
@@ -70,9 +59,9 @@ def show_student_heads_consistent(
 
         for j, head in enumerate(heads, start=1):
             pred = np.squeeze(preds_dict[head][i])
-            cmap = _HEAD_CMAPS.get(head, "viridis")
 
-            axes[i, j].imshow(pred, cmap=cmap, vmin=0, vmax=1)
+            # gray_r: alta probabilidad = oscuro (más fácil de leer sobre fondo claro)
+            axes[i, j].imshow(pred, cmap="gray_r", vmin=0, vmax=1)
             axes[i, j].set_title(
                 f"min={pred.min():.2f} max={pred.max():.2f}\nmean={pred.mean():.2f}",
                 fontsize=6,
