@@ -80,6 +80,8 @@ class PipelineML:
 
         context = PipelineContext.now(request_id=req_id, assets=assets, work_dir=work_dir)
         context.metadata["normalization_profile_jsonl"] = self.config.paths.normalization_profile_jsonl
+        context.metadata["patient_json_profiles_dir"] = self.config.paths.patient_json_profiles_dir
+        context.metadata["redis_url"] = self.config.paths.redis_url
 
         payload: dict[str, Any] = {"image": image, "request_id": req_id}
 
