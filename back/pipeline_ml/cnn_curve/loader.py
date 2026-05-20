@@ -40,6 +40,18 @@ def load_binary_curve_model(
     if not path.exists():
         raise FileNotFoundError(f"Checkpoint no encontrado: {path}")
 
+    # Detectar puntero Git LFS (empieza con "version https://git-lfs")
+    header = path.read_bytes(27)
+    if header.startswith(b"version https://git-lfs"):
+        raise RuntimeError(
+            f"El archivo '{path}' es un puntero Git LFS, no el modelo real.\n"
+            "El modelo no fue subido al servidor LFS (GIT_LFS_SKIP_PUSH fue usado).\n"
+            "Opciones:\n"
+            "  1. Apunta 'binary_curve_model_path' al archivo real en Google Drive.\n"
+            "  2. Sube el .pt a LFS: git lfs push origin <branch> --all\n"
+            "     Luego en Colab: git lfs pull --include='...best_binary_curve_model.pt'"
+        )
+
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     else:
