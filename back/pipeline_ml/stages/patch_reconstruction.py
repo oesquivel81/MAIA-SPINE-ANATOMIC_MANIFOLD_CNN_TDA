@@ -19,8 +19,14 @@ Agrega al payload:
     payload["support_map"]           ndarray     uint8 {0,1} [H, W]  binary>0.30 & coverage>0
     payload["combined_signal"]       ndarray     float32 [H, W]  señal estructural ponderada
                                                  = (0.55*boundary + 0.85*intervertebral + 0.15*ordinal) * support
+    payload["vertical_profiles"]     dict        boundary_profile, inter_profile, combined_profile (norm01 [H])
+                                                 y combined_map float32 [H,W]
     payload["recon_csv_path"]        str         ruta al CSV de métricas por cabeza
     payload["patch_reconstruction_done"] bool True
+
+Imágenes guardadas adicionales:
+    analysis_grid.png       grid 1×4: imagen | intervertebral | boundary | señal combinada
+    vertical_profiles.png   perfiles boundary / intervertebral / merge con peaks y curvas suavizadas
 
 Señal combinada:
     binary actúa como soporte (umbral relajado 0.30) — define dónde hay estructura.
@@ -186,7 +192,24 @@ class PatchReconstructionStage(PipelineStage):
             f"PatchReconstructionStage: señal combinada guardada → {cs_p}"
         )
 
-        # ── Visualizaciones ────────────────────────────────────────────
+        # ── Perfil vertical y análisis de gaps ────────────────────────
+        profiles = self._profile_from_maps(
+            boundary=recon_maps["boundary"],
+            inter=recon_maps["intervertebral"],
+            binary=recon_maps["binary"],
+        )
+
+        ag_p = out_root / "analysis_grid.png"
+        self._show_analysis_grid(image, recon_maps, combined_signal, ag_p, plots_show)
+
+        vp_p = out_root / "vertical_profiles.png"
+        self._show_profiles_plot(profiles, vp_p, plots_show)
+
+        logger.info(
+            f"PatchReconstructionStage: perfiles verticales guardados → {vp_p}"
+        )
+
+        # ── Visualización completa (grid 3 filas) ─────────────────────
         if plots_show:
             self._show_reconstruction(
                 image, recon_maps, freq_maps, coverage_map,
@@ -201,6 +224,7 @@ class PatchReconstructionStage(PipelineStage):
         payload["coverage_map"] = coverage_map
         payload["support_map"] = support_map
         payload["combined_signal"] = combined_signal
+        payload["vertical_profiles"] = profiles
         payload["recon_csv_path"] = str(csv_path)
         payload["patch_reconstruction_done"] = True
         return payload
@@ -506,3 +530,183 @@ class PatchReconstructionStage(PipelineStage):
         fig.suptitle("PatchReconstructionStage — mapas full-size", fontsize=9)
         plt.tight_layout()
         plt.show()
+        plt.close(fig)
+
+    # ------------------------------------------------------------------
+    # Grid análisis: imagen · intervertebral · boundary · señal combinada
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _show_analysis_grid(
+        image: np.ndarray,
+        recon_maps: dict[str, np.ndarray],
+        combined_signal: np.ndarray,
+        out_path: Path,
+        plots_show: bool = False,
+    ) -> None:
+        """
+        Grid 1×4: imagen | intervertebral | boundary | señal combinada.
+        Siempre guarda PNG en ``out_path``; muestra en pantalla solo si
+        ``plots_show`` es True.
+        """
+        import matplotlib.pyplot as plt
+
+        inter   = recon_maps["intervertebral"]
+        bnd     = recon_maps["boundary"]
+        vmax_cs = float(combined_signal.max()) or 1.0
+
+        fig, axes = plt.subplots(1, 4, figsize=(14, 4))
+
+        axes[0].imshow(image if image.ndim == 2 else image[:, :, 0], cmap="gray")
+        axes[0].set_title("Imagen", fontsize=8, fontweight="bold")
+        axes[0].axis("off")
+
+        axes[1].imshow(inter, cmap="gray_r", vmin=0, vmax=1)
+        axes[1].set_title(
+            f"Intervertebral\ncov={np.mean(inter >= _THRESHOLD)*100:.1f}%",
+            fontsize=7,
+        )
+        axes[1].axis("off")
+
+        axes[2].imshow(bnd, cmap="gray_r", vmin=0, vmax=1)
+        axes[2].set_title(
+            f"Boundary\ncov={np.mean(bnd >= _THRESHOLD)*100:.1f}%",
+            fontsize=7,
+        )
+        axes[2].axis("off")
+
+        axes[3].imshow(combined_signal, cmap="gray_r", vmin=0, vmax=vmax_cs)
+        axes[3].set_title(
+            f"Señal combinada\n0.55·bnd+0.85·inter+0.15·ord\nmax={vmax_cs:.2f}",
+            fontsize=7,
+        )
+        axes[3].axis("off")
+
+        fig.suptitle(
+            "Análisis estructural — intervertebral · boundary · señal combinada",
+            fontsize=9,
+        )
+        plt.tight_layout()
+        fig.savefig(str(out_path), dpi=120, bbox_inches="tight")
+        if plots_show:
+            plt.show()
+        plt.close(fig)
+
+    # ------------------------------------------------------------------
+    # Perfiles verticales: gaps, peaks y curvas suavizadas
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _show_profiles_plot(
+        profiles: dict[str, np.ndarray],
+        out_path: Path,
+        plots_show: bool = False,
+    ) -> None:
+        """
+        Gráfica de perfiles verticales con curvas suavizadas y marcado de peaks.
+
+        Columnas:
+          0 — boundary  (raw + suavizada + peaks)
+          1 — intervertebral (raw + suavizada + peaks)
+          2 — merge: boundary_s · inter_s · combinada_s + peaks
+
+        Siempre guarda PNG en ``out_path``; muestra en pantalla solo si
+        ``plots_show`` es True.
+        """
+        import matplotlib.pyplot as plt
+
+        # ── Suavizado ──────────────────────────────────────────────────
+        try:
+            from scipy.ndimage import gaussian_filter1d as _gf
+            sigma   = 3
+            bnd_s   = _gf(profiles["boundary_profile"],  sigma)
+            inter_s = _gf(profiles["inter_profile"],     sigma)
+            comb_s  = _gf(profiles["combined_profile"],  sigma)
+        except ImportError:
+            def _smooth(v: np.ndarray, w: int = 9) -> np.ndarray:
+                k = np.exp(-0.5 * ((np.arange(w) - w // 2) / (w / 4.0)) ** 2)
+                k /= k.sum()
+                return np.convolve(v, k, mode="same").astype(np.float32)
+            bnd_s   = _smooth(profiles["boundary_profile"])
+            inter_s = _smooth(profiles["inter_profile"])
+            comb_s  = _smooth(profiles["combined_profile"])
+
+        # ── Detección de peaks ─────────────────────────────────────────
+        try:
+            from scipy.signal import find_peaks as _fp
+            _kw = {"distance": 8, "prominence": 0.05}
+            peaks_bnd,   _ = _fp(bnd_s,   **_kw)
+            peaks_inter, _ = _fp(inter_s, **_kw)
+            peaks_comb,  _ = _fp(comb_s,  **_kw)
+        except ImportError:
+            def _find_peaks(v: np.ndarray, min_dist: int = 8) -> np.ndarray:
+                cands = np.where((v[1:-1] > v[:-2]) & (v[1:-1] > v[2:]))[0] + 1
+                out: list[int] = []
+                last = -min_dist
+                for i in sorted(cands.tolist(), key=lambda x: -float(v[x])):
+                    if i - last >= min_dist:
+                        out.append(i)
+                        last = i
+                return np.array(sorted(out), dtype=np.int32)
+            peaks_bnd   = _find_peaks(bnd_s)
+            peaks_inter = _find_peaks(inter_s)
+            peaks_comb  = _find_peaks(comb_s)
+
+        H = len(profiles["combined_profile"])
+        y = np.arange(H)
+
+        fig, axes = plt.subplots(1, 3, figsize=(14, 5), sharey=True)
+
+        # ── Col 0: boundary ────────────────────────────────────────────
+        axes[0].plot(profiles["boundary_profile"], y,
+                     color="#aaaaaa", lw=0.8, alpha=0.6, label="raw")
+        axes[0].plot(bnd_s, y,
+                     color="#2196F3", lw=1.8, label="suavizada")
+        if len(peaks_bnd):
+            axes[0].scatter(bnd_s[peaks_bnd], peaks_bnd,
+                            s=45, color="#F44336", zorder=5,
+                            label=f"peaks ({len(peaks_bnd)})")
+        axes[0].set_title("Boundary\nperfil vertical", fontsize=8)
+        axes[0].set_xlabel("Activación media", fontsize=7)
+        axes[0].set_ylabel("Fila (px)", fontsize=7)
+        axes[0].invert_yaxis()
+        axes[0].legend(fontsize=6)
+        axes[0].grid(True, alpha=0.3)
+
+        # ── Col 1: intervertebral ──────────────────────────────────────
+        axes[1].plot(profiles["inter_profile"], y,
+                     color="#aaaaaa", lw=0.8, alpha=0.6, label="raw")
+        axes[1].plot(inter_s, y,
+                     color="#4CAF50", lw=1.8, label="suavizada")
+        if len(peaks_inter):
+            axes[1].scatter(inter_s[peaks_inter], peaks_inter,
+                            s=45, color="#F44336", zorder=5,
+                            label=f"peaks ({len(peaks_inter)})")
+        axes[1].set_title("Intervertebral\nperfil vertical", fontsize=8)
+        axes[1].set_xlabel("Activación media", fontsize=7)
+        axes[1].invert_yaxis()
+        axes[1].legend(fontsize=6)
+        axes[1].grid(True, alpha=0.3)
+
+        # ── Col 2: merge ───────────────────────────────────────────────
+        axes[2].plot(profiles["combined_profile"], y,
+                     color="#aaaaaa", lw=0.8, alpha=0.6, label="raw combinada")
+        axes[2].plot(bnd_s,   y, color="#2196F3", lw=1.0, alpha=0.5, label="boundary_s")
+        axes[2].plot(inter_s, y, color="#4CAF50", lw=1.0, alpha=0.5, label="inter_s")
+        axes[2].plot(comb_s,  y, color="#FF9800", lw=2.2,             label="merge suavizada")
+        if len(peaks_comb):
+            axes[2].scatter(comb_s[peaks_comb], peaks_comb,
+                            s=55, color="#F44336", zorder=5,
+                            label=f"peaks ({len(peaks_comb)})")
+        axes[2].set_title("Merge — curva combinada\ngaps y peaks vertebrales", fontsize=8)
+        axes[2].set_xlabel("Activación media", fontsize=7)
+        axes[2].invert_yaxis()
+        axes[2].legend(fontsize=6)
+        axes[2].grid(True, alpha=0.3)
+
+        fig.suptitle("Estudio de gaps y peaks — perfiles vertebrales", fontsize=9)
+        plt.tight_layout()
+        fig.savefig(str(out_path), dpi=120, bbox_inches="tight")
+        if plots_show:
+            plt.show()
+        plt.close(fig)
