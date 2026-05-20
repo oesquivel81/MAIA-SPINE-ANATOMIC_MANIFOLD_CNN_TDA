@@ -10,6 +10,7 @@ from app.repositories.file_metadata_repository import FileMetadataRepository
 from app.services.file_service import FileService
 from app.services.normalization_profile_loader import NormalizationProfileLoader
 from app.services.normalization_service import NormalizationService
+from app.services.patient_service import PatientService
 
 
 class Container:
@@ -40,6 +41,13 @@ class Container:
     def normalization_service(self) -> NormalizationService:
         return NormalizationService(profile_loader=self.normalization_profile_loader())
 
+    def patient_service(self) -> PatientService:
+        return PatientService(
+            settings=self.settings,
+            repository=self.file_repository(),
+            s3_component=self.s3,
+        )
+
 
 @lru_cache
 def _build_container() -> Container:
@@ -58,6 +66,10 @@ def get_normalization_service(
     container: Container = Depends(get_container),
 ) -> NormalizationService:
     return container.normalization_service()
+
+
+def get_patient_service(container: Container = Depends(get_container)) -> PatientService:
+    return container.patient_service()
 
 
 def get_normalization_profile_loader(
