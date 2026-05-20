@@ -75,24 +75,9 @@ class NormalizationTraceabilityService:
         payload: dict[str, Any],
         save_json: bool,
         normalized_image: np.ndarray | None = None,
-        normalized_plot: np.ndarray | None = None,
         visualization_image: np.ndarray | None = None,
+        generate_visualization: bool = True,
     ) -> dict[str, Any]:
-        """Persiste los artefactos de trazabilidad.
-
-        Camino A (siempre): guarda imagen normalizada cruda + plot mandatorio
-            en la carpeta local de trazabilidad.
-        Camino B (bandera): cuando normalization_trace_s3_enabled está activo,
-            sube toda la carpeta a S3.
-
-        Args:
-            normalized_image: imagen normalizada cruda (array cv2). Siempre se guarda.
-            normalized_plot: plot matplotlib de la imagen normalizada. MANDATORIO –
-                siempre se guarda en ``plots/`` cuando se proporciona.
-            visualization_image: plot de comparación original vs normalizado con
-                métricas. OPCIONAL – solo se guarda si se proporciona
-                (controlado por normalization_trace_visualization_enabled).
-        """
         log_method_start(
             logger,
             self.__class__.__name__,
@@ -109,6 +94,7 @@ class NormalizationTraceabilityService:
         }
 
         trace_dir = self._base_dir / identity.folder_name
+        trace_dir.mkdir(parents=True, exist_ok=True)
 
         result = {
             "trace_id": identity.trace_id,
@@ -121,15 +107,12 @@ class NormalizationTraceabilityService:
             "trace_json_path": None,
             "trace_csv_path": None,
             "trace_normalized_image_path": None,
-            "trace_normalized_plot_path": None,
             "trace_visualization_path": None,
             "trace_redis_key": None,
             "trace_mongo_collection": None,
             "trace_route_b_mode": None,
             "trace_warnings": [],
         }
-
-        # --- imagen normalizada cruda (siempre) ---
         if normalized_image is not None:
             image_dir = trace_dir / "normalized_image"
             image_dir.mkdir(parents=True, exist_ok=True)
@@ -143,22 +126,7 @@ class NormalizationTraceabilityService:
                 logger.warning(warning)
                 result["trace_warnings"].append(warning)
 
-        # --- plot normalizado MANDATORIO (camino A siempre) ---
-        if normalized_plot is not None:
-            plots_dir = trace_dir / "plots"
-            plots_dir.mkdir(parents=True, exist_ok=True)
-            plot_path = plots_dir / f"{identity.trace_id}_normalized_plot.png"
-            ok_plot = cv2.imwrite(str(plot_path), normalized_plot)
-            if ok_plot:
-                result["trace_normalized_plot_path"] = str(plot_path)
-                trace_document["trace_normalized_plot_path"] = str(plot_path)
-            else:
-                warning = "No se pudo guardar el plot normalizado en plots/"
-                logger.warning(warning)
-                result["trace_warnings"].append(warning)
-
-        # --- plot de comparación OPCIONAL ---
-        if visualization_image is not None:
+        if generate_visualization and visualization_image is not None:
             vis_dir = trace_dir / "visualization"
             vis_dir.mkdir(parents=True, exist_ok=True)
             vis_path = vis_dir / f"{identity.trace_id}_visualization.png"
