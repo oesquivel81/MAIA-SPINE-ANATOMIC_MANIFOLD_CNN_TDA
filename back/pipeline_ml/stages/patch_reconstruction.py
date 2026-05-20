@@ -24,6 +24,8 @@ Agrega al payload:
     payload["gap_analysis"]          dict        n_peaks, n_gap_peaks, mean_gap_spacing, std_gap_spacing,
                                                  vertebra_type, figure_path, profile_csv, peaks_csv,
                                                  df_profile (DataFrame), df_events (DataFrame)
+    payload["spatial_index"]         dict        df_curve, df_centroids, df_peaks, df_match,
+                                                 panel_path, n_centroids, n_peaks_proj, n_matches
     payload["recon_csv_path"]        str         ruta al CSV de métricas por cabeza
     payload["patch_reconstruction_done"] bool True
 
@@ -34,6 +36,12 @@ Imágenes guardadas adicionales:
     gap_peak_analysis/{pk}_gap_peak_profile.csv   perfil con scores y flags por fila
     gap_peak_analysis/{pk}_gap_peak_events.csv    tabla de peaks y gap_peaks detectados
     gap_peak_analysis/{pk}_gap_peak_summary.csv   resumen estadístico del paciente
+    vertebra_gap_peak_analysis.csv              alias de events en out_root (para dataset builder)
+    spatial_index/curve_spatial_index.csv       curva central con arclength y t_norm
+    spatial_index/centroids_projected_to_curve.csv  centroides + proyección a curva
+    spatial_index/peaks_projected_to_curve.csv      peaks gap + proyección a curva
+    spatial_index/centroid_peak_spatial_index.csv   match final con spatial_order
+    spatial_index/panel_spatial_index_curve_centroids_peaks.png  panel visual
 
 Señal combinada:
     binary actúa como soporte (umbral relajado 0.30) — define dónde hay estructura.
@@ -108,6 +116,14 @@ def _classify_gap_spacing(n_peaks: int, mean_spacing: float) -> str:
     if mean_spacing <= 35:
         return "regular_gaps"
     return "sparse_gaps"
+
+
+def _normalize01_img(x: np.ndarray) -> np.ndarray:
+    """Normaliza imagen/array float o uint8 al rango [0, 1]."""
+    x = np.asarray(x, dtype=np.float32)
+    if x.max() > 1.5:
+        x = x / 255.0
+    return np.clip(x, 0.0, 1.0)
 
 
 class PatchReconstructionStage(PipelineStage):
@@ -257,6 +273,23 @@ class PatchReconstructionStage(PipelineStage):
             f"PatchReconstructionStage: gaps/peaks → {gap_analysis['figure_path']}"
         )
 
+        # ── Índice espacial curva + centroides + peaks ─────────────────
+        spatial_dir = out_root / "spatial_index"
+        spatial_dir.mkdir(parents=True, exist_ok=True)
+        ordered_mask: np.ndarray | None = payload.get("ordered_vertebra_mask")
+        spatial_index = self._build_spatial_index(
+            image=image,
+            binary_map=recon_maps["binary"],
+            gap_analysis=gap_analysis,
+            patient_key=patient_key,
+            out_dir=spatial_dir,
+            plots_show=plots_show,
+            ordered_mask=ordered_mask,
+        )
+        logger.info(
+            f"PatchReconstructionStage: índice espacial → {spatial_index['panel_path']}"
+        )
+
         # ── Visualización completa (grid 3 filas) ─────────────────────
         if plots_show:
             self._show_reconstruction(
@@ -274,6 +307,7 @@ class PatchReconstructionStage(PipelineStage):
         payload["combined_signal"] = combined_signal
         payload["vertical_profiles"] = profiles
         payload["gap_analysis"] = gap_analysis
+        payload["spatial_index"] = spatial_index
         payload["recon_csv_path"] = str(csv_path)
         payload["patch_reconstruction_done"] = True
         return payload
@@ -878,12 +912,35 @@ class PatchReconstructionStage(PipelineStage):
             )
         )
 
+        # ── Completar columnas esperadas en df_events ──────────────────
+        if len(df_events) > 0:
+            df_events = df_events.sort_values("curve_idx").reset_index(drop=True)
+            df_events["vertebra_id"]     = np.arange(1, len(df_events) + 1, dtype=np.int32)
+            df_events["peak_height"]     = df_events["value"].astype(np.float32)
+            df_events["wavelength_prev"] = df_events["curve_idx"].diff().fillna(0.0).astype(np.float32)
+            df_events["wavelength_next"] = df_events["curve_idx"].diff(-1).abs().fillna(0.0).astype(np.float32)
+            _win = 5
+            _gap_str: list[float] = []
+            for _, _ev in df_events.iterrows():
+                if _ev["kind"] == "gap_peak":
+                    _lo = max(0, int(_ev["idx"]) - _win)
+                    _hi = min(H, int(_ev["idx"]) + _win + 1)
+                    _gap_str.append(float(gap_smooth[_lo:_hi].mean()))
+                else:
+                    _gap_str.append(float("nan"))
+            df_events["gap_strength_mean"] = _gap_str
+        else:
+            for _col in ["vertebra_id", "peak_height", "wavelength_prev",
+                          "wavelength_next", "gap_strength_mean"]:
+                df_events[_col] = pd.Series(dtype=np.float32)
+
         # ── Guardar CSVs ───────────────────────────────────────────────
         out_dir.mkdir(parents=True, exist_ok=True)
-        profile_csv = out_dir / f"{patient_key}_gap_peak_profile.csv"
-        peaks_csv   = out_dir / f"{patient_key}_gap_peak_events.csv"
-        summary_csv = out_dir / f"{patient_key}_gap_peak_summary.csv"
-        fig_path    = out_dir / f"{patient_key}_gap_peak_analysis.png"
+        profile_csv  = out_dir / f"{patient_key}_gap_peak_profile.csv"
+        peaks_csv    = out_dir / f"{patient_key}_gap_peak_events.csv"
+        summary_csv  = out_dir / f"{patient_key}_gap_peak_summary.csv"
+        vertebra_csv = out_dir.parent / "vertebra_gap_peak_analysis.csv"  # alias para dataset builder
+        fig_path     = out_dir / f"{patient_key}_gap_peak_analysis.png"
 
         summary = {
             "patient_key":      patient_key,
@@ -897,11 +954,13 @@ class PatchReconstructionStage(PipelineStage):
             "profile_csv":      str(profile_csv),
             "peaks_csv":        str(peaks_csv),
             "summary_csv":      str(summary_csv),
+            "vertebra_csv":     str(vertebra_csv),
             "figure_path":      str(fig_path),
         }
 
         df_profile.to_csv(str(profile_csv), index=False)
         df_events.to_csv(str(peaks_csv),    index=False)
+        df_events.to_csv(str(vertebra_csv), index=False)  # alias compatible con build_patient_region_spatial_metrics_dataset
         pd.DataFrame([summary]).to_csv(str(summary_csv), index=False)
 
         # ── Figura ─────────────────────────────────────────────────────
@@ -940,3 +999,641 @@ class PatchReconstructionStage(PipelineStage):
         plt.close(fig)
 
         return {**summary, "df_profile": df_profile, "df_events": df_events}
+
+    # ------------------------------------------------------------------
+    # Índice espacial: curva, centroides, peaks, matches
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _compute_curve_from_binary(
+        binary: np.ndarray,
+        n_points: int = 240,
+        thr: float = 0.30,
+    ) -> pd.DataFrame | None:
+        """Curva central por fila (media de x en píxeles con binary > thr)."""
+        import pandas as pd
+
+        binary = _normalize01_img(binary)
+        ys_pix, xs_pix = np.where(binary > thr)
+        if len(xs_pix) == 0:
+            return None
+        H, W = binary.shape
+        curve_ys = np.linspace(float(ys_pix.min()), float(ys_pix.max()), n_points)
+        curve_xs: list[float] = []
+        for yy in curve_ys:
+            row_x = xs_pix[np.abs(ys_pix - int(round(float(yy)))) < 4]
+            curve_xs.append(
+                float(np.mean(row_x)) if len(row_x) > 0
+                else (curve_xs[-1] if curve_xs else float(W // 2))
+            )
+        curve_xs_arr = cv2.GaussianBlur(
+            np.array(curve_xs, dtype=np.float32).reshape(-1, 1), (1, 11), 0,
+        ).ravel()
+        curve_ys_arr = np.array(curve_ys, dtype=np.float32)
+        dx = np.diff(curve_xs_arr, prepend=curve_xs_arr[0])
+        dy = np.diff(curve_ys_arr, prepend=curve_ys_arr[0])
+        arc_length = np.cumsum(np.sqrt(dx**2 + dy**2))
+        total = float(arc_length[-1]) or 1.0
+        return pd.DataFrame({
+            "curve_idx": np.arange(len(curve_xs_arr)),
+            "x_curve":   curve_xs_arr,
+            "y_curve":   curve_ys_arr,
+            "arc_length": arc_length,
+            "t_norm":    arc_length / total,
+        })
+
+    @staticmethod
+    def _extract_centroids_from_ordered_mask(
+        ordered_mask: np.ndarray,
+        min_area: int = 25,
+    ) -> pd.DataFrame:
+        """Centroides por label de ordered_vertebra_mask."""
+        import pandas as pd
+
+        ordered_mask = np.asarray(ordered_mask)
+        rows: list[dict] = []
+        for lab in sorted([int(x) for x in np.unique(ordered_mask) if int(x) > 0]):
+            m = ordered_mask == lab
+            if int(m.sum()) < min_area:
+                continue
+            ys, xs = np.where(m)
+            rows.append({
+                "vertebra_id": int(lab),
+                "centroid_x":  float(xs.mean()),
+                "centroid_y":  float(ys.mean()),
+                "area_px":     int(m.sum()),
+                "bbox_x1": int(xs.min()), "bbox_x2": int(xs.max()),
+                "bbox_y1": int(ys.min()), "bbox_y2": int(ys.max()),
+            })
+        return pd.DataFrame(rows)
+
+    @staticmethod
+    def _extract_centroids_from_binary_components(
+        binary: np.ndarray,
+        min_area: int = 25,
+    ) -> pd.DataFrame:
+        """Centroides por componentes conectadas (fallback sin ordered mask)."""
+        import pandas as pd
+
+        mask = (_normalize01_img(binary) > 0.35).astype(np.uint8)
+        n, _, stats, centroids = cv2.connectedComponentsWithStats(mask, connectivity=8)
+        rows: list[dict] = []
+        for lab in range(1, n):
+            area = int(stats[lab, cv2.CC_STAT_AREA])
+            if area < min_area:
+                continue
+            cx, cy = centroids[lab]
+            rows.append({
+                "vertebra_id": len(rows) + 1,
+                "centroid_x":  float(cx),
+                "centroid_y":  float(cy),
+                "area_px":     area,
+                "bbox_x1": int(stats[lab, cv2.CC_STAT_LEFT]),
+                "bbox_y1": int(stats[lab, cv2.CC_STAT_TOP]),
+                "bbox_x2": int(stats[lab, cv2.CC_STAT_LEFT] + stats[lab, cv2.CC_STAT_WIDTH]),
+                "bbox_y2": int(stats[lab, cv2.CC_STAT_TOP] + stats[lab, cv2.CC_STAT_HEIGHT]),
+            })
+        df = pd.DataFrame(rows)
+        if len(df) > 0:
+            df = df.sort_values("centroid_y").reset_index(drop=True)
+            df["vertebra_id"] = np.arange(1, len(df) + 1, dtype=np.int32)
+        return df
+
+    @staticmethod
+    def _project_points_to_curve(
+        points_df: pd.DataFrame,
+        df_curve: pd.DataFrame,
+        x_col: str,
+        y_col: str,
+        prefix: str,
+    ) -> pd.DataFrame:
+        """Proyecta puntos al punto más cercano de la curva (distancia Euclidea)."""
+        import pandas as pd
+
+        if points_df is None or len(points_df) == 0:
+            return pd.DataFrame()
+        curve_xy = df_curve[["x_curve", "y_curve"]].values.astype(np.float32)
+        rows: list[dict] = []
+        for _, r in points_df.iterrows():
+            x, y = float(r[x_col]), float(r[y_col])
+            d = np.sqrt((curve_xy[:, 0] - x)**2 + (curve_xy[:, 1] - y)**2)
+            j = int(np.argmin(d))
+            out = dict(r)
+            out[f"{prefix}_curve_idx"]         = j
+            out[f"{prefix}_curve_x"]           = float(df_curve.loc[j, "x_curve"])
+            out[f"{prefix}_curve_y"]           = float(df_curve.loc[j, "y_curve"])
+            out[f"{prefix}_arc_length"]        = float(df_curve.loc[j, "arc_length"])
+            out[f"{prefix}_t_norm"]            = float(df_curve.loc[j, "t_norm"])
+            out[f"{prefix}_distance_to_curve"] = float(d[j])
+            rows.append(out)
+        return pd.DataFrame(rows)
+
+    @staticmethod
+    def _match_centroids_to_peaks(
+        df_centroids_proj: pd.DataFrame,
+        df_peaks_proj: pd.DataFrame,
+        max_arc_dist: float = 18.0,
+    ) -> pd.DataFrame:
+        """Empata cada centroide con el peak más cercano en arc_length."""
+        import pandas as pd
+
+        if len(df_centroids_proj) == 0 or len(df_peaks_proj) == 0:
+            return pd.DataFrame()
+        rows: list[dict] = []
+        for _, c in df_centroids_proj.iterrows():
+            ca = float(c["centroid_arc_length"])
+            best, best_dist = None, float("inf")
+            for _, p in df_peaks_proj.iterrows():
+                dist = abs(ca - float(p["peak_arc_length"]))
+                if dist < best_dist:
+                    best_dist, best = dist, p
+            out = dict(c)
+            if best is not None and best_dist <= max_arc_dist:
+                out.update({
+                    "matched_peak_id":            int(best["peak_id"]),
+                    "matched_peak_curve_idx":     int(best["peak_curve_idx"]),
+                    "matched_peak_x":             float(best["peak_x"]),
+                    "matched_peak_y":             float(best["peak_y"]),
+                    "matched_peak_value":         float(best.get("peak_value", float("nan"))),
+                    "centroid_peak_arc_distance": float(best_dist),
+                    "centroid_peak_xy_distance":  float(
+                        np.sqrt(
+                            (float(c["centroid_x"]) - float(best["peak_x"]))**2 +
+                            (float(c["centroid_y"]) - float(best["peak_y"]))**2
+                        )
+                    ),
+                    "match_status": "matched",
+                })
+            else:
+                out.update({
+                    "matched_peak_id":            float("nan"),
+                    "matched_peak_curve_idx":     float("nan"),
+                    "matched_peak_x":             float("nan"),
+                    "matched_peak_y":             float("nan"),
+                    "matched_peak_value":         float("nan"),
+                    "centroid_peak_arc_distance": float("nan"),
+                    "centroid_peak_xy_distance":  float("nan"),
+                    "match_status":               "no_peak_nearby",
+                })
+            rows.append(out)
+        df_match = pd.DataFrame(rows)
+        if len(df_match) > 0:
+            df_match = df_match.sort_values("centroid_arc_length").reset_index(drop=True)
+            df_match["spatial_order"]              = np.arange(1, len(df_match) + 1, dtype=np.int32)
+            df_match["prev_centroid_arc_length"]   = df_match["centroid_arc_length"].shift(1)
+            df_match["next_centroid_arc_length"]   = df_match["centroid_arc_length"].shift(-1)
+            df_match["arc_dist_prev_centroid"]     = (
+                df_match["centroid_arc_length"] - df_match["prev_centroid_arc_length"]
+            )
+            df_match["arc_dist_next_centroid"]     = (
+                df_match["next_centroid_arc_length"] - df_match["centroid_arc_length"]
+            )
+        return df_match
+
+    @staticmethod
+    def _build_spatial_index(
+        image: np.ndarray,
+        binary_map: np.ndarray,
+        gap_analysis: dict,
+        patient_key: str,
+        out_dir: Path,
+        plots_show: bool = False,
+        ordered_mask: np.ndarray | None = None,
+        cfg: dict | None = None,
+    ) -> dict:
+        """
+        Indexación espacial: curva + centroides + peaks + matches.
+        Equivalente a ``build_spatial_index_for_patient`` del cuaderno.
+
+        Usa datos en memoria del pipeline (no lee archivos).
+        Peaks: gap_peaks de ``gap_analysis["df_events"]``.
+        Centroides: de ``ordered_mask`` si se provee, si no de componentes de ``binary_map``.
+        Siempre guarda CSVs y panel PNG en ``out_dir``; muestra si ``plots_show``.
+        """
+        import matplotlib.pyplot as plt
+        import pandas as pd
+
+        _cfg = {
+            "curve_points": 240,
+            "binary_thr_for_curve": 0.30,
+            "binary_thr_for_centroids": 0.15,
+            "max_arc_distance_peak_centroid": 18.0,
+            "min_component_area": 25,
+        }
+        if cfg is not None:
+            _cfg.update(cfg)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        # ── 1) Curva ─────────────────────────────────────────────────
+        df_curve = PatchReconstructionStage._compute_curve_from_binary(
+            binary_map,
+            n_points=int(_cfg["curve_points"]),
+            thr=float(_cfg["binary_thr_for_curve"]),
+        )
+        if df_curve is None:
+            raise ValueError(f"No se pudo calcular curva para {patient_key}")
+        df_curve["patient_key"] = patient_key
+
+        # ── 2) Centroides ─────────────────────────────────────────────
+        if ordered_mask is not None:
+            df_centroids = PatchReconstructionStage._extract_centroids_from_ordered_mask(
+                ordered_mask, min_area=int(_cfg["min_component_area"]),
+            )
+            centroid_source = "ordered_mask"
+        else:
+            df_centroids = PatchReconstructionStage._extract_centroids_from_binary_components(
+                binary_map, min_area=int(_cfg["min_component_area"]),
+            )
+            centroid_source = "binary_components"
+        if len(df_centroids) > 0:
+            df_centroids["patient_key"]     = patient_key
+            df_centroids["centroid_source"] = centroid_source
+
+        # ── 3) Peaks de gap_analysis ──────────────────────────────────
+        df_events = gap_analysis.get("df_events", pd.DataFrame())
+        df_peaks  = pd.DataFrame()
+        if len(df_events) > 0:
+            gap_rows = df_events[df_events["kind"] == "gap_peak"].copy()
+            if len(gap_rows) > 0:
+                peak_xs: list[float] = []
+                for _, ev in gap_rows.iterrows():
+                    y_t   = float(ev["curve_idx"])
+                    idx_c = int(np.argmin(np.abs(df_curve["y_curve"].values - y_t)))
+                    peak_xs.append(float(df_curve.loc[idx_c, "x_curve"]))
+                gap_rows = gap_rows.copy()
+                gap_rows["peak_x"]  = peak_xs
+                gap_rows["peak_y"]  = gap_rows["curve_idx"].astype(float)
+                gap_rows["peak_id"] = np.arange(1, len(gap_rows) + 1, dtype=np.int32)
+                _keep = [c for c in ["patient_key", "peak_id", "curve_idx",
+                                      "peak_x", "peak_y", "value"] if c in gap_rows.columns]
+                df_peaks = gap_rows[_keep].rename(
+                    columns={"curve_idx": "peak_curve_idx_raw", "value": "peak_value"}
+                )
+
+        # ── 4) Proyectar a curva ───────────────────────────────────────
+        df_centroids_proj = PatchReconstructionStage._project_points_to_curve(
+            df_centroids, df_curve, "centroid_x", "centroid_y", "centroid",
+        )
+        df_peaks_proj = (
+            PatchReconstructionStage._project_points_to_curve(
+                df_peaks, df_curve, "peak_x", "peak_y", "peak",
+            )
+            if len(df_peaks) > 0
+            else pd.DataFrame()
+        )
+
+        # ── 5) Match centroides ↔ peaks ────────────────────────────────
+        df_match = PatchReconstructionStage._match_centroids_to_peaks(
+            df_centroids_proj,
+            df_peaks_proj,
+            max_arc_dist=float(_cfg["max_arc_distance_peak_centroid"]),
+        )
+
+        # ── 6) Guardar CSVs ───────────────────────────────────────────
+        df_curve.to_csv(str(out_dir / "curve_spatial_index.csv"), index=False)
+        df_centroids_proj.to_csv(str(out_dir / "centroids_projected_to_curve.csv"), index=False)
+        df_peaks_proj.to_csv(str(out_dir / "peaks_projected_to_curve.csv"), index=False)
+        df_match.to_csv(str(out_dir / "centroid_peak_spatial_index.csv"), index=False)
+
+        # ── 7) Panel visual ───────────────────────────────────────────
+        base = image if image.ndim == 2 else image[:, :, 0]
+        fig, axes = plt.subplots(1, 3, figsize=(18, 7))
+
+        axes[0].imshow(base, cmap="gray")
+        axes[0].plot(df_curve["x_curve"], df_curve["y_curve"], lw=2, color="#2196F3")
+        if len(df_centroids_proj) > 0:
+            axes[0].scatter(
+                df_centroids_proj["centroid_x"], df_centroids_proj["centroid_y"],
+                s=35, color="#4CAF50",
+            )
+            for _, r in df_centroids_proj.iterrows():
+                axes[0].text(
+                    float(r["centroid_x"]), float(r["centroid_y"]),
+                    str(int(r["vertebra_id"])), color="yellow", fontsize=8,
+                )
+        axes[0].set_title("Curva + centroides", fontsize=9)
+        axes[0].axis("off")
+
+        axes[1].imshow(base, cmap="gray")
+        axes[1].plot(df_curve["x_curve"], df_curve["y_curve"], lw=2, color="#2196F3")
+        if len(df_peaks_proj) > 0:
+            axes[1].scatter(
+                df_peaks_proj["peak_x"], df_peaks_proj["peak_y"],
+                s=35, color="#FF9800", marker="^",
+            )
+            for _, r in df_peaks_proj.iterrows():
+                axes[1].text(
+                    float(r["peak_x"]), float(r["peak_y"]),
+                    str(int(r["peak_id"])), color="cyan", fontsize=8,
+                )
+        axes[1].set_title("Curva + peaks (gap)", fontsize=9)
+        axes[1].axis("off")
+
+        axes[2].imshow(base, cmap="gray")
+        axes[2].plot(df_curve["x_curve"], df_curve["y_curve"], lw=2, color="#2196F3")
+        if len(df_match) > 0:
+            axes[2].scatter(
+                df_match["centroid_x"], df_match["centroid_y"],
+                s=35, color="#4CAF50", label="centroid",
+            )
+            good = df_match["match_status"] == "matched"
+            if good.any():
+                axes[2].scatter(
+                    df_match.loc[good, "matched_peak_x"],
+                    df_match.loc[good, "matched_peak_y"],
+                    s=35, color="#FF5722", marker="^", label="peak",
+                )
+                for _, r in df_match.loc[good].iterrows():
+                    axes[2].plot(
+                        [float(r["centroid_x"]), float(r["matched_peak_x"])],
+                        [float(r["centroid_y"]), float(r["matched_peak_y"])],
+                        lw=1, color="#FFC107", alpha=0.7,
+                    )
+            for _, r in df_match.iterrows():
+                axes[2].text(
+                    float(r["centroid_x"]), float(r["centroid_y"]),
+                    str(int(r["spatial_order"])), color="white", fontsize=9,
+                )
+        axes[2].set_title("Centroide ↔ peak matches", fontsize=9)
+        axes[2].axis("off")
+        axes[2].legend(fontsize=7)
+
+        fig.suptitle(
+            f"{patient_key} — indexación espacial curva · centroides · peaks", fontsize=11,
+        )
+        plt.tight_layout()
+        panel_path = out_dir / "panel_spatial_index_curve_centroids_peaks.png"
+        fig.savefig(str(panel_path), dpi=160, bbox_inches="tight")
+        if plots_show:
+            plt.show()
+        plt.close(fig)
+
+        n_matches = (
+            int((df_match["match_status"] == "matched").sum())
+            if len(df_match) > 0 else 0
+        )
+        return {
+            "patient_key":  patient_key,
+            "df_curve":     df_curve,
+            "df_centroids": df_centroids_proj,
+            "df_peaks":     df_peaks_proj,
+            "df_match":     df_match,
+            "panel_path":   str(panel_path),
+            "n_centroids":  len(df_centroids_proj),
+            "n_peaks_proj": len(df_peaks_proj),
+            "n_matches":    n_matches,
+        }
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Funciones de módulo: dataset espacial multi-paciente
+# ──────────────────────────────────────────────────────────────────────
+
+def _compute_apex_relation(row: dict) -> dict:
+    """
+    Relaciona cada vértebra/región con apex, Cobb y CSVL del JSON de métricas.
+    Usado por ``build_patient_region_spatial_metrics_dataset``.
+    """
+    import math
+
+    def _notna(v: object) -> bool:
+        try:
+            return math.isfinite(float(v))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return False
+
+    apex_idx        = row.get("cobb_curve_metrics_i_apex_global")
+    apex_lumbar_idx = row.get("cobb_curve_metrics_i_apex_lumbar")
+    c_idx           = row.get("centroid_curve_idx")
+    p_idx           = row.get("matched_peak_curve_idx")
+    csvl_x          = row.get("csvl_x_px")
+    centroid_x      = row.get("centroid_x")
+    t               = row.get("centroid_t_norm")
+
+    out: dict = {}
+    out["dist_centroid_curve_idx_to_apex_global"] = (
+        abs(float(c_idx) - float(apex_idx)) if _notna(apex_idx) and _notna(c_idx) else float("nan")
+    )
+    out["dist_centroid_curve_idx_to_apex_lumbar"] = (
+        abs(float(c_idx) - float(apex_lumbar_idx))
+        if _notna(apex_lumbar_idx) and _notna(c_idx) else float("nan")
+    )
+    out["dist_peak_curve_idx_to_apex_global"] = (
+        abs(float(p_idx) - float(apex_idx)) if _notna(apex_idx) and _notna(p_idx) else float("nan")
+    )
+    out["dist_centroid_x_to_csvl_px"] = (
+        abs(float(centroid_x) - float(csvl_x))
+        if _notna(csvl_x) and _notna(centroid_x) else float("nan")
+    )
+    out["signed_centroid_x_minus_csvl_px"] = (
+        float(centroid_x) - float(csvl_x)
+        if _notna(csvl_x) and _notna(centroid_x) else float("nan")
+    )
+    if not _notna(t):
+        out["curve_zone"] = "unknown"
+    elif float(t) < 0.25:
+        out["curve_zone"] = "upper"
+    elif float(t) < 0.50:
+        out["curve_zone"] = "upper_mid"
+    elif float(t) < 0.75:
+        out["curve_zone"] = "lower_mid"
+    else:
+        out["curve_zone"] = "lower"
+    return out
+
+
+def _classify_region_affection(row: dict) -> str:
+    """
+    Clasificación inicial de región afectada.
+    Combina Cobb, dist. apex y tipo vertebral por peak/gap.
+    """
+    import math
+
+    try:
+        cobb = float(row.get("cobb_angle_deg") or 0)
+    except (TypeError, ValueError):
+        cobb = 0.0
+    try:
+        dist_apex = float(row.get("dist_centroid_curve_idx_to_apex_global") or math.nan)
+    except (TypeError, ValueError):
+        dist_apex = math.nan
+    if not math.isfinite(dist_apex):
+        dist_apex = 999999.0
+    vtype = str(row.get("vertebra_type", ""))
+
+    if cobb < 10:
+        base = "normal_or_minimal"
+    elif dist_apex <= 40:
+        base = "apex_region"
+    elif dist_apex <= 90:
+        base = "peri_apex_region"
+    else:
+        base = "distal_region"
+
+    if vtype in {"compressed", "weak_gap", "wide_or_missing_gap"}:
+        base = base + "_structural_irregular"
+    return base
+
+
+def build_patient_region_spatial_metrics_dataset(
+    patient_dirs_root: Path,
+    metrics_json_root: Path | None = None,
+    patient_keys: list[str] | None = None,
+    save: bool = True,
+    out_dir: Path | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Construye dataset multi-paciente combinando:
+      - spatial_index/centroid_peak_spatial_index.csv  (de _build_spatial_index)
+      - vertebra_gap_peak_analysis.csv                 (de _analyze_peaks_gaps)
+      - metrics_*.json                                 (métricas radiográficas, opcional)
+
+    Parameters
+    ----------
+    patient_dirs_root : directorio con subdirectorios por paciente (outputs/patch_reconstruction/).
+    metrics_json_root : directorio con JSONs de métricas (opcional).
+    patient_keys      : lista de claves a procesar; si None, todos los subdirectorios.
+    save              : guardar CSV de salida.
+    out_dir           : directorio de salida; por defecto ``patient_dirs_root / "datasets"``.
+
+    Returns
+    -------
+    (df_dataset, df_errors)
+    """
+    import json
+    import re
+    import pandas as pd
+
+    try:
+        from tqdm.auto import tqdm as _tqdm  # type: ignore[import]
+    except ImportError:
+        def _tqdm(it, **_kw):  # type: ignore[misc]
+            return it
+
+    patient_dirs_root = Path(patient_dirs_root)
+    _out = Path(out_dir) if out_dir else patient_dirs_root / "datasets"
+    _out.mkdir(parents=True, exist_ok=True)
+
+    if patient_keys is None:
+        patient_keys = [p.name for p in sorted(patient_dirs_root.iterdir()) if p.is_dir()]
+
+    def _pid(pk: str) -> int | None:
+        m = re.search(r"(\d+)", str(pk))
+        return int(m.group(1)) if m else None
+
+    def _pclass(pk: str) -> str:
+        return "normal" if pk.startswith("N_") else ("scoliosis" if pk.startswith("S_") else "unknown")
+
+    def _load_metrics(pk: str) -> dict:
+        base: dict = {"patient_key": pk, "patient_id": _pid(pk), "patient_class": _pclass(pk)}
+        if metrics_json_root is None:
+            return base
+        pid = _pid(pk)
+        if pid is None:
+            return base
+        candidates = [
+            Path(metrics_json_root) / f"metrics_{pid}.json",
+            Path(metrics_json_root) / f"metric_{pid}.json",
+        ]
+        path = next((p for p in candidates if p.exists()), None)
+        if path is None:
+            hits = sorted(Path(metrics_json_root).glob(f"*{pid}*.json"))
+            path = hits[0] if hits else None
+        if path is None:
+            return base
+
+        def _flat(d: dict, prefix: str = "") -> dict:
+            out: dict = {}
+            for k, v in d.items():
+                kk = f"{prefix}_{k}" if prefix else k
+                if isinstance(v, dict):
+                    out.update(_flat(v, kk))
+                elif isinstance(v, (list, tuple)):
+                    out[kk] = json.dumps(v)
+                else:
+                    out[kk] = v
+            return out
+
+        with open(path, "r", encoding="utf-8") as fh:
+            base.update(_flat(json.load(fh)))
+        return base
+
+    all_rows: list[pd.DataFrame] = []
+    errors: list[dict] = []
+
+    for pk in _tqdm(patient_keys, desc="Dataset espacial + métricas"):
+        try:
+            pdir = patient_dirs_root / pk
+            spatial_csv = pdir / "spatial_index" / "centroid_peak_spatial_index.csv"
+            gap_csv     = pdir / "vertebra_gap_peak_analysis.csv"
+
+            if not spatial_csv.exists():
+                errors.append({"patient_key": pk, "error": f"missing {spatial_csv}"})
+                continue
+
+            df = pd.read_csv(spatial_csv)
+            if gap_csv.exists():
+                df_gap = pd.read_csv(gap_csv)
+                if "vertebra_id" in df_gap.columns:
+                    merge_cols = [c for c in df_gap.columns if c != "patient_key"]
+                    df = df.merge(
+                        df_gap[["patient_key"] + merge_cols],
+                        on=["patient_key", "vertebra_id"],
+                        how="left",
+                        suffixes=("", "_gap"),
+                    )
+
+            metrics = _load_metrics(pk)
+            for k, v in metrics.items():
+                df[k] = v
+
+            rel_rows = [_compute_apex_relation(dict(r)) for _, r in df.iterrows()]
+            df_rel   = pd.DataFrame(rel_rows)
+            df = pd.concat([df.reset_index(drop=True), df_rel.reset_index(drop=True)], axis=1)
+
+            df["region_affection_type"] = [
+                _classify_region_affection(dict(r)) for _, r in df.iterrows()
+            ]
+            df["region_key"] = (
+                df["patient_key"].astype(str)
+                + "_V"
+                + df["vertebra_id"].astype(int).astype(str).str.zfill(2)
+            )
+            df["has_spatial_index"]    = 1
+            df["has_gap_peak_analysis"] = int(gap_csv.exists())
+            all_rows.append(df)
+
+        except Exception as exc:
+            errors.append({"patient_key": pk, "error": repr(exc)})
+
+    df_dataset = pd.concat(all_rows, ignore_index=True) if all_rows else pd.DataFrame()
+    df_errors  = pd.DataFrame(errors)
+
+    if save:
+        df_dataset.to_csv(str(_out / "patient_region_spatial_metrics_dataset.csv"), index=False)
+        df_errors.to_csv(str(_out / "patient_region_spatial_metrics_dataset_errors.csv"), index=False)
+
+    return df_dataset, df_errors
+
+
+def fill_missing_patient_region_dataset_with_zero(
+    df: pd.DataFrame,
+    save: bool = True,
+    out_path: Path | None = None,
+) -> pd.DataFrame:
+    """
+    Rellena NaN/Inf numéricos con 0 y strings vacíos con ``""``.
+    Equivalente a ``fill_missing_patient_region_dataset_with_zero`` del cuaderno.
+    """
+    import pandas as pd  # noqa: F811
+
+    df0 = df.copy()
+    for c in df0.select_dtypes(include=[np.number]).columns:
+        df0[c] = df0[c].replace([np.inf, -np.inf], np.nan).fillna(0)
+    for c in df0.select_dtypes(include=["object"]).columns:
+        df0[c] = df0[c].fillna("").replace("nan", "")
+    for c in df0.select_dtypes(include=["bool"]).columns:
+        df0[c] = df0[c].astype(int)
+    if save and out_path is not None:
+        df0.to_csv(str(Path(out_path)), index=False)
+    return df0
