@@ -40,9 +40,11 @@ class NormalizationTraceabilityService:
         self._redis = redis_component
         self._mongo = mongo_component
         self._s3 = s3_component
+        _output_dir = Path(settings.normalization_traceability_output_dir)
         self._base_dir = (
-            Path(__file__).resolve().parents[2]
-            / settings.normalization_traceability_output_dir
+            _output_dir
+            if _output_dir.is_absolute()
+            else Path.cwd() / _output_dir
         )
 
     def build_identity(
