@@ -1,0 +1,15 @@
+category,suffix,n,total_mb
+01_binary_curve_cnn,.csv,2,0.060272216796875
+01_binary_curve_cnn,.joblib,1,0.016280174255371094
+01_binary_curve_cnn,.json,1,0.0021429061889648438
+01_binary_curve_cnn,.pt,4,50.07059860229492
+02_student_1ch_4heads,.csv,1,0.04577922821044922
+02_student_1ch_4heads,.joblib,1,1.9132633209228516
+02_student_1ch_4heads,.pt,2,3.785654067993164
+03_cnn_10ch_multitask,.joblib,1,29.691797256469727
+03_cnn_10ch_multitask,.json,1,0.0031366348266601562
+03_cnn_10ch_multitask,.pt,2,59.389883041381836
+03_cnn_10ch_multitask,.txt,1,0.007366180419921875
+03_cnn_10ch_multitask/legacy_regional_reference,.pt,2,59.364606857299805
+04_clustering_tda,.csv,4,1.2566070556640625
+04_clustering_tda,.joblib,2,27.6378231048584

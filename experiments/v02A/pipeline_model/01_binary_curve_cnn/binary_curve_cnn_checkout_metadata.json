@@ -1,0 +1,40 @@
+{
+  "checkout_name": "binary_curve_cnn_checkout_final",
+  "created_at": "20260518_223518",
+  "model_role": "binary_curve_cnn",
+  "model_description": "CNN binaria/curva: curva prioritaria + binaria soporte",
+  "source_root": "/content/patient_curve_targets_from_binary_mask_cnn",
+  "source_best_checkpoint": "/content/patient_curve_targets_from_binary_mask_cnn/checkpoints/best_binary_curve_model.pt",
+  "source_last_checkpoint": "/content/patient_curve_targets_from_binary_mask_cnn/checkpoints/last_binary_curve_model.pt",
+  "source_history_csv": "/content/patient_curve_targets_from_binary_mask_cnn/training_history.csv",
+  "checkout_dir": "/content/V3_RX_NORMALIZED_BINARY_CURVE_STUDENT_PATCHES/04_binary_curve_cnn/FINAL_CHECKOUT_20260518_223518",
+  "final_best_checkpoint": "/content/V3_RX_NORMALIZED_BINARY_CURVE_STUDENT_PATCHES/04_binary_curve_cnn/FINAL_CHECKOUT_20260518_223518/best_binary_curve_model.pt",
+  "final_last_checkpoint": "/content/V3_RX_NORMALIZED_BINARY_CURVE_STUDENT_PATCHES/04_binary_curve_cnn/FINAL_CHECKOUT_20260518_223518/last_binary_curve_model.pt",
+  "final_history_csv": "/content/V3_RX_NORMALIZED_BINARY_CURVE_STUDENT_PATCHES/04_binary_curve_cnn/FINAL_CHECKOUT_20260518_223518/training_history.csv",
+  "best_row_from_history": {
+    "epoch": 3,
+    "stage": "binary_only_strong",
+    "lr": 0.001,
+    "train_loss": 1.109096109867096,
+    "train_bce_bin": 0.2209889300559696,
+    "train_dice_bin_loss": 0.2770214049439681,
+    "train_bce_curve": 0.1117654795709409,
+    "train_dice_curve_loss": 0.803716916786997,
+    "train_curve_outside": 0.0235122375582393,
+    "train_binary_dice": 0.7229785950560319,
+    "train_curve_dice": 0.1962830879186329,
+    "val_loss": 1.2520334869623184,
+    "val_bce_bin": 0.2486613802611827,
+    "val_dice_bin_loss": 0.3177280277013778,
+    "val_bce_curve": 0.110260022804141,
+    "val_dice_curve_loss": 0.8130086660385132,
+    "val_curve_outside": 0.0240705977194011,
+    "val_binary_dice": 0.6822719722986221,
+    "val_curve_dice": 0.1869913376867771
+  },
+  "expected_outputs": [
+    "binary",
+    "curve"
+  ],
+  "notes": "This checkout stores the final binary/curve CNN artifacts. The best checkpoint should be used for inference unless a later checkpoint is explicitly required."
+}

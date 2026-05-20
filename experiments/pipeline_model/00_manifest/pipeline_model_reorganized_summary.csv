@@ -1,0 +1,6 @@
+category,suffix,n,total_mb
+00_manifest,.csv,2,0.007963180541992188
+00_manifest,.json,1,0.0006866455078125
+03_regional_patch_cnn,.pt,2,59.364606857299805
+04_clustering_tda,.csv,4,1.2566070556640625
+04_clustering_tda,.joblib,2,27.6378231048584
