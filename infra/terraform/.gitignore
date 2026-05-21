@@ -3,6 +3,7 @@
 terraform.tfstate
 terraform.tfstate.*
 *.tfvars
+*.auto.tfvars.json
 crash.log
 override.tf
 override.tf.json

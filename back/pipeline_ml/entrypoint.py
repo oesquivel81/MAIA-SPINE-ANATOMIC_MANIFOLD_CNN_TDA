@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,7 @@ from pipeline_ml.stages import (
     CurveRefinementStage,
     CurvePatchStage,
     StudentPatchStage,
+    PatchReconstructionStage,
     IngestionStage,
     InferenceStage,
     PersistenceStage,
@@ -96,6 +98,7 @@ class PipelineML:
             CurveRefinementStage(),
             CurvePatchStage(),
             StudentPatchStage(),
+            PatchReconstructionStage(),
             InferenceStage(),
             PostprocessingStage(),
             PersistenceStage(),
@@ -192,11 +195,23 @@ class PipelineML:
         outputs["s3"] = s3_result
         outputs["mongo"] = mongo_result
 
-        # Camino B — flush fire-and-forget antes de retornar
+        # ── Flush fire-and-forget sinks antes de retornar ─────────────
         if self.config.routing.instance_mode:
             mongo_flush = self.async_mongo_stage_writer.flush(timeout_seconds=5.0)
             kafka_flush = self.async_kafka_stage_publisher.flush()
             metrics["stage_sinks"] = {"mongo_flush": mongo_flush, "kafka_flush": kafka_flush}
+
+        # ── JSON clínico consolidado ───────────────────────────────────
+        clinical_result = _build_clinical_result(req_id, assets.full_name, payload)
+        outputs["clinical_result"] = clinical_result
+        clinical_json_path = context.outputs_dir / "clinical_result.json"
+        try:
+            clinical_json_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(clinical_json_path, "w", encoding="utf-8") as _fh:
+                json.dump(clinical_result, _fh, indent=2, default=str)
+            outputs["clinical_result_path"] = str(clinical_json_path)
+        except Exception as _e:
+            self.logger.warn(f"No se pudo guardar clinical_result.json: {_e}")
 
         if self.config.debug.print_step_summary:
             self.logger.info(f"Pipeline completado en {total_ms:.2f} ms")
@@ -255,3 +270,66 @@ def run_pipeline_main(
         request_id=pipeline_input.get("request_id"),
     )
     return asdict(result)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _build_clinical_result(request_id: str, full_name: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Construye un dict serializable con todos los paths de imágenes y predicciones."""
+
+    # ── Imágenes de patches del student ──────────────────────────────
+    patch_input_paths: list[str] = payload.get("patch_input_paths", [])
+    # fallback: reconstruir desde student_outputs si existen
+    if not patch_input_paths:
+        for so in payload.get("student_outputs", []):
+            ip = so.get("input_path")
+            if ip:
+                patch_input_paths.append(ip)
+
+    # ── Imágenes de reconstrucción ────────────────────────────────────
+    gap_analysis  = payload.get("gap_analysis",  {}) or {}
+    spatial_index = payload.get("spatial_index", {}) or {}
+
+    images: dict[str, Any] = {
+        "combined_signal":       payload.get("combined_signal_path"),
+        "analysis_grid":         payload.get("analysis_grid_path"),
+        "gap_peak_analysis":     gap_analysis.get("figure_path"),
+        "spatial_index_panel":   spatial_index.get("panel_path"),
+        "binary_mask":           payload.get("binary_mask_path"),
+        "curve_mask":            payload.get("curve_mask_path"),
+        "normalized_image":      payload.get("normalized_image_path"),
+        "patch_inputs":          patch_input_paths,
+    }
+
+    # ── Predicciones de inferencia ────────────────────────────────────
+    inference = payload.get("inference") or {}
+    predictions: dict[str, Any] = {
+        "inference_done":       payload.get("inference_done", False),
+        "cobb_angle_deg":       inference.get("cobb_angle_deg"),
+        "cobb_severity":        inference.get("cobb_severity"),
+        "dominant_cluster_id":  inference.get("dominant_cluster_id"),
+        "n_clusters_detected":  inference.get("n_clusters_detected"),
+        "clinical_json_path":   inference.get("json_path"),
+        "clinical_figure_path": inference.get("figure_path"),
+        "summary_csv_path":     inference.get("summary_csv_path"),
+        "regions_csv_path":     inference.get("regions_csv_path"),
+    }
+
+    # ── Resumen de gaps/peaks ─────────────────────────────────────────
+    gap_summary: dict[str, Any] = {
+        "mean_gap_spacing": gap_analysis.get("mean_gap_spacing"),
+        "std_gap_spacing":  gap_analysis.get("std_gap_spacing"),
+        "n_peaks":          gap_analysis.get("n_peaks"),
+        "n_gap_peaks":      gap_analysis.get("n_gap_peaks"),
+        "vertebra_csv_path": gap_analysis.get("vertebra_csv_path"),
+    }
+
+    return {
+        "request_id":   request_id,
+        "patient_name": full_name,
+        "images":       images,
+        "predictions":  predictions,
+        "gap_summary":  gap_summary,
+    }

@@ -215,7 +215,7 @@ class StudentPatchStage(PipelineStage):
                     "crop_side": crop_side,
                 })
 
-            student_outputs.append({"patch_idx": i, **{h: probs[h] for h in _HEADS}})
+            student_outputs.append({"patch_idx": i, "input_path": str(input_path), **{h: probs[h] for h in _HEADS}})
             student_masks.append({"patch_idx": i, **{h: masks[h] for h in _HEADS}})
             debug_inputs.append(patch_224)
             debug_probs.append(probs)
@@ -246,6 +246,7 @@ class StudentPatchStage(PipelineStage):
         payload["student_csv_path"] = str(csv_path)
         payload["student_outputs"] = student_outputs
         payload["student_masks"] = student_masks
+        payload["patch_input_paths"] = [so["input_path"] for so in student_outputs]
         payload["student_done"] = True
         return payload
 

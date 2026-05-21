@@ -33,7 +33,9 @@ def main() -> None:
 
     mongo_uri = os.getenv("MONGO_URI", "mongodb://mongo:27017")
     mongo_db = os.getenv("MONGO_DB", "app_db")
-    mongo_collection = os.getenv("MONGO_LISTENER_COLLECTION", "pipeline_stage_metrics")
+    mongo_collection_fallback = os.getenv("MONGO_LISTENER_COLLECTION", "pipeline_stage_metrics")
+    # Prefix usado para construir el nombre de colección por stage: pipeline_stage_<stage>
+    mongo_collection_prefix = os.getenv("MONGO_LISTENER_COLLECTION_PREFIX", "pipeline_stage")
 
     print(
         "[listener] starting",
@@ -43,7 +45,8 @@ def main() -> None:
             "kafka_group_id": kafka_group_id,
             "mongo_uri": mongo_uri,
             "mongo_db": mongo_db,
-            "mongo_collection": mongo_collection,
+            "mongo_collection_prefix": mongo_collection_prefix,
+            "mongo_collection_fallback": mongo_collection_fallback,
         },
     )
 
@@ -53,7 +56,7 @@ def main() -> None:
         try:
             mongo_client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
             mongo_client.admin.command("ping")
-            target_collection = mongo_client[mongo_db][mongo_collection]
+            db = mongo_client[mongo_db]
 
             consumer = KafkaConsumer(
                 bootstrap_servers=[x.strip() for x in kafka_bootstrap.split(",") if x.strip()],
@@ -73,6 +76,12 @@ def main() -> None:
                 for _tp, records in polled.items():
                     for record in records:
                         event = record.value if isinstance(record.value, dict) else {"raw": record.value}
+                        # Determina la colección destino según el stage del mensaje
+                        stage = event.get("stage") if isinstance(event, dict) else None
+                        if stage:
+                            collection_name = f"{mongo_collection_prefix}_{stage}"
+                        else:
+                            collection_name = mongo_collection_fallback
                         doc = {
                             "source": "kafka_listener",
                             "received_at": _now_iso(),
@@ -85,7 +94,7 @@ def main() -> None:
                             },
                             "event": event,
                         }
-                        target_collection.insert_one(doc)
+                        db[collection_name].insert_one(doc)
 
         except Exception as exc:
             print(f"[listener] error: {exc}; retrying in 5s")

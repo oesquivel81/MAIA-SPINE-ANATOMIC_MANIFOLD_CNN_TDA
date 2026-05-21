@@ -34,7 +34,6 @@ resource "terraform_data" "hf_to_s3_sync" {
       HF_REVISION         = var.hf_revision
       HF_ALLOW_PATTERNS   = var.hf_allow_patterns
       HF_IGNORE_PATTERNS  = var.hf_ignore_patterns
-      HF_LOCAL_DIR        = "${path.module}/.hf_cache"
       HF_TARGET_S3_BUCKET = local.pipeline_bucket_name
       HF_TARGET_S3_PREFIX = var.hf_target_s3_prefix
       AWS_REGION          = var.aws_region
