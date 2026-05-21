@@ -5,8 +5,10 @@ from fastapi import FastAPI
 from app.api.v1.router import api_v1_router
 from app.core.config import get_settings
 from app.core.container import get_container
-
+from fastapi.middleware.cors import CORSMiddleware
 settings = get_settings()
+
+
 
 logging.basicConfig(
 	level=logging.DEBUG if settings.normalization_debug_enabled else logging.INFO,
@@ -37,3 +39,14 @@ async def startup_event() -> None:
 	except Exception as e:
 		logger.error(f"Error durante bootstrap: {str(e)}", exc_info=True)
 		raise
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",  # Vite dev server
+        "http://localhost:3000",  # Alternative port
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
