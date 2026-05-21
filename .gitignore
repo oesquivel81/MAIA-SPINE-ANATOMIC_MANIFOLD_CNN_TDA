@@ -28,7 +28,7 @@ env/
 back/pipeline_ml_artifacts/
 back/pipeline_ml/outputs/
 back/docs/normalization_traceability_runtime/
-
+front/node_modules/
 # ── Cobertura / testing ──────────────────────────────────────────────────────
 .pytest_cache/
 .coverage
