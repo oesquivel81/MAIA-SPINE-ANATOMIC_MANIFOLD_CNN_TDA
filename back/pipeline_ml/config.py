@@ -72,9 +72,12 @@ class PipelinePaths:
     s3_bucket: str = ""
     s3_prefix: str = "pipeline-ml"
 
+    mongo_uri: str = ""
     mongo_database: str = "maia"
     mongo_collection: str = "pipeline_metrics"
 
+    kafka_bootstrap_servers: str = ""
+    kafka_topic_prefix: str = "pipeline-stage"
     kafka_topic: str = "pipeline-progress"
     lambda_function_name: str = ""
 

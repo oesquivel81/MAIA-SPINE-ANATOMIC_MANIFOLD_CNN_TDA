@@ -4,7 +4,7 @@ resource "aws_eks_cluster" "maia" {
   count = local.use_eks ? 1 : 0
 
   name     = "${local.name_prefix}-eks"
-  role_arn = data.aws_iam_role.lab_role.arn
+  role_arn = var.lab_role_arn
   version  = var.eks_cluster_version
 
   vpc_config {
@@ -26,7 +26,7 @@ resource "aws_eks_node_group" "maia" {
 
   cluster_name    = aws_eks_cluster.maia[0].name
   node_group_name = "${local.name_prefix}-ng"
-  node_role_arn   = data.aws_iam_role.lab_role.arn
+  node_role_arn   = var.lab_role_arn
   subnet_ids      = data.aws_subnets.eks_supported.ids
   instance_types  = var.eks_node_instance_types
 

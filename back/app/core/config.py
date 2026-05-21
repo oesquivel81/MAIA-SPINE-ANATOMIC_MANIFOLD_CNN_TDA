@@ -37,6 +37,14 @@ class Settings(BaseSettings):
     redis_normalization_trace_prefix: str = "normalization_trace"
     mongo_normalization_traces_collection: str = "normalization_traces"
 
+    # Pipeline B — Kafka y Mongo por stage
+    kafka_bootstrap_servers: str = ""
+    kafka_topic_prefix: str = "pipeline-stage"
+    pipeline_instance_mode: bool = False
+    pipeline_write_metrics_to_mongo: bool = False
+    pipeline_publish_events_to_kafka: bool = False
+    pipeline_mongo_collection: str = "pipeline_stage_metrics"
+
     model_config = SettingsConfigDict(
         env_file=("application.properties", ".env"),
         env_file_encoding="utf-8",

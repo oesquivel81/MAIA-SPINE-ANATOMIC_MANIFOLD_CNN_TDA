@@ -1,0 +1,17 @@
+{
+  "hf_sync_enabled": true,
+  "hf_token": "hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "hf_repo_id": "octavioeac1981/MAIA-SCOLEOSIS-CNN-MANIFOLD",
+  "hf_repo_type": "dataset",
+  "hf_revision": "main",
+  "hf_allow_patterns": "experiments/v02A/pipeline_model/**",
+  "hf_ignore_patterns": "*.tmp,*.log",
+  "hf_target_s3_bucket": "",
+  "hf_target_s3_prefix": "huggingface/models",
+  "hf_python_executable": "python",
+  "pipeline_binary_curve_model_key": "experiments/v02A/pipeline_model/01_binary_curve_cnn/best_binary_curve_model.pt",
+  "pipeline_student_patch_model_key": "experiments/v02A/pipeline_model/01_binary_curve_cnn/student_1ch_4heads_boundary_rescue_final.pt",
+  "pipeline_clustering_model_key": "experiments/v02A/pipeline_model/03_clustering/clustering_model.joblib",
+  "pipeline_normalization_profile_jsonl_key": "resources/NORMALIZATION_PROFILES/normalization_profiles.jsonl",
+  "pipeline_resources_prefix_key": "experiments/v02A/pipeline_model"
+}

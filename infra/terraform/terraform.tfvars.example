@@ -4,6 +4,7 @@ aws_region   = "us-east-1"
 app_port     = 8000
 
 deployment_target = "ecs"
+lab_role_arn      = "arn:aws:iam::123456789012:role/LabRole"
 
 eks_cluster_version = "1.30"
 

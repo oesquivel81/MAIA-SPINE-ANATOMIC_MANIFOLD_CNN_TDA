@@ -4,5 +4,7 @@ resources:
   - namespace.yaml
   - redis.yaml
   - mongo.yaml
+  - kafka.yaml
   - backend.yaml
+  - listener.yaml
   - frontend.yaml

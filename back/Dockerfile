@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 COPY pipeline_ml ./pipeline_ml
 COPY resources ./resources
+COPY scripts ./scripts
 
 EXPOSE 8000
 

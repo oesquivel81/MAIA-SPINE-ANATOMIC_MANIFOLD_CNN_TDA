@@ -30,11 +30,6 @@ data "aws_subnets" "eks_supported" {
   }
 }
 
-# LabRole existente
-data "aws_iam_role" "lab_role" {
-  name = "LabRole"
-}
-
 # Availability zones
 data "aws_availability_zones" "available" {
   state = "available"
