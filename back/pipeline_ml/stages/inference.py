@@ -163,13 +163,10 @@ class InferenceStage(PipelineStage):
         try:
             bundle = self._load_cluster_bundle(cluster_path)
         except Exception as exc:
-            logger.warn(
-                f"InferenceStage: fallo al cargar bundle de clustering: {exc}. "
-                f"Saltando prediccion GMM."
-            )
-            payload["inference_done"] = False
-            payload["inference_error"] = str(exc)
-            return payload
+            logger.warn(f"InferenceStage: {exc}")
+            raise
+        assert "feature_cols" in bundle, "bundle debe contener 'feature_cols'"
+        assert "best_model"   in bundle, "bundle debe contener 'best_model'"
         feature_cols: list[str] = bundle["feature_cols"]
 
         # ── Construir features ─────────────────────────────────────────
@@ -233,33 +230,48 @@ class InferenceStage(PipelineStage):
         import joblib
         import pickle
 
+        last_exc: Exception | None = None
+
         # Intento 1: joblib nativo
         try:
-            bundle = joblib.load(str(joblib_path))
-        except Exception as e_joblib:
-            # Intento 2: pickle directo con encoding latin-1 (compatibilidad Python 2)
-            try:
-                with open(str(joblib_path), "rb") as fh:
-                    bundle = pickle.load(fh, encoding="latin-1")
-            except Exception:
-                # Intento 3: pickle directo con encoding bytes
-                try:
-                    with open(str(joblib_path), "rb") as fh:
-                        bundle = pickle.load(fh, encoding="bytes")
-                except Exception:
-                    raise RuntimeError(
-                        f"No se pudo cargar el bundle de clustering desde "
-                        f"'{joblib_path}'.\n"
-                        f"Error original de joblib: {e_joblib}\n"
-                        f"Probable causa: el archivo fue guardado con una version "
-                        f"incompatible de joblib/Python.\n"
-                        f"Solucion: re-exportar el bundle en el entorno actual con:\n"
-                        f"  import joblib; joblib.dump(bundle, '{joblib_path}')"
-                    ) from e_joblib
+            return joblib.load(str(joblib_path))
+        except Exception as e:
+            last_exc = e
 
-        assert "feature_cols" in bundle, "bundle debe contener 'feature_cols'"
-        assert "best_model"   in bundle, "bundle debe contener 'best_model'"
-        return bundle
+        # Intento 2: pickle con encoding latin-1 (compatibilidad Python 2)
+        try:
+            with open(str(joblib_path), "rb") as fh:
+                return pickle.load(fh, encoding="latin-1")
+        except Exception as e:
+            last_exc = e
+
+        # Intento 3: pickle con encoding bytes
+        try:
+            with open(str(joblib_path), "rb") as fh:
+                return pickle.load(fh, encoding="bytes")
+        except Exception as e:
+            last_exc = e
+
+        # Intento 4: dill (más robusto entre versiones)
+        try:
+            import dill  # type: ignore[import]
+            with open(str(joblib_path), "rb") as fh:
+                return dill.load(fh)
+        except ImportError:
+            pass  # dill no disponible
+        except Exception as e:
+            last_exc = e
+
+        raise RuntimeError(
+            f"No se pudo cargar el bundle de clustering desde '{joblib_path}'.\n"
+            f"Error: {last_exc}\n"
+            f"El archivo fue guardado con una version incompatible de joblib/Python.\n"
+            f"Solucion — ejecutar en Colab en la sesion donde existe el bundle:\n"
+            f"  import joblib\n"
+            f"  bundle = <tu variable bundle en memoria>\n"
+            f"  joblib.dump(bundle, '{joblib_path}')\n"
+            f"O instalar dill:  !pip install dill"
+        ) from last_exc
 
     # ------------------------------------------------------------------
     # Construcción de features
