@@ -1,173 +1,266 @@
-# MAIA SPINE - Frontend para Análisis de Escoliosis
+# MAIA-SPINE Frontend
 
-Interface web para el sistema de diagnóstico de escoliosis basado en CNN y TDA.
+A modern web application for spine analysis and scoliosis detection, built with React, Material-UI, and TypeScript.
 
-## Descripción
+## Overview
 
-Esta aplicación proporciona una interfaz moderna para cargar, analizar y visualizar radiografías de columna vertebral. Se conecta con el backend FastAPI del repositorio [MAIA-SPINE-ANATOMIC_MANIFOLD_CNN_TDA](https://github.com/oesquivel81/MAIA-SPINE-ANATOMIC_MANIFOLD_CNN_TDA.git).
+This application provides a user-friendly interface for the MAIA-SPINE (Anatomic Manifold CNN + TDA) backend system. It allows healthcare professionals to:
 
-## Características
+- Upload spine X-ray images
+- Input patient information
+- Analyze images using deep learning models
+- View segmentation results and clinical predictions
+- Review Cobb angle measurements and severity classifications
+- Access detailed metrics and visualizations
 
-- **Carga de imágenes**: Interfaz drag-and-drop para subir radiografías
-- **Visualización de imágenes**: Visor con zoom y rotación para radiografías
-- **Diagrama de columna**: Visualización interactiva de vértebras
-- **Tabla de mediciones**: Métricas detalladas con rangos normales y alertas
-- **Visualización 3D**: Mapa de calor interactivo de la columna vertebral
-- **Normalización de imágenes**: Procesamiento automático mediante API backend
+## Features
 
-## Tecnologías
+✨ **Patient Management**
+- Patient information form (name, age, weight, sex, date)
+- X-ray image upload with preview
+- Secure data transmission to backend
 
-- React 18.3.1
-- TypeScript
-- Material UI 7.3.5
-- Tailwind CSS 4.1.12
-- Lucide React (iconos)
-- Sonner (notificaciones)
-- Vite 6.3.5
+📊 **Analysis & Visualization**
+- Real-time image processing status
+- Interactive spine diagram showing vertebrae
+- Multiple image views:
+  - Original and normalized images
+  - Binary and curve masks
+  - Heatmaps and analysis grids
+  - Combined signal visualization
 
-## Estructura del Proyecto
+🎯 **Clinical Predictions**
+- Cobb angle measurement (degrees)
+- Severity classification (Leve, Moderado, Severo)
+- Vertebrae detection count
+- Gap spacing metrics
+- Cluster analysis results
 
-```
-src/
-├── app/
-│   ├── App.tsx                         # Componente principal
-│   ├── components/
-│   │   ├── FileUpload.tsx             # Componente de carga de archivos
-│   │   ├── ImageViewer.tsx            # Visor de radiografías
-│   │   ├── SpineDiagram.tsx           # Diagrama de columna vertebral
-│   │   ├── MeasurementsTable.tsx      # Tabla de mediciones
-│   │   └── HeatmapVisualization.tsx   # Visualización 3D con mapa de calor
-│   └── services/
-│       └── api.ts                      # Servicio de API para backend
-└── styles/
-    └── index.css                       # Estilos globales
-```
+🎨 **Modern UI**
+- Dark theme optimized for medical imaging
+- Responsive grid layout
+- Material Design components
+- Professional color scheme matching radiology software
 
-## Conexión con el Backend
+## Tech Stack
 
-### Requisitos Previos
+- **React 18** - UI framework
+- **TypeScript** - Type safety
+- **Material-UI (MUI) v7** - Component library
+- **Vite 6** - Build tool and dev server
+- **Tailwind CSS v4** - Utility-first styling
 
-1. Tener el backend corriendo desde el repositorio principal
-2. Docker y Docker Compose instalados (para el backend)
+## Getting Started
 
-### Iniciar el Backend
+### Prerequisites
 
-```bash
-# Clonar el repositorio backend
-git clone https://github.com/oesquivel81/MAIA-SPINE-ANATOMIC_MANIFOLD_CNN_TDA.git
-cd MAIA-SPINE-ANATOMIC_MANIFOLD_CNN_TDA
+- Node.js 18+ (or use the included runtime)
+- pnpm package manager
+- MAIA-SPINE backend running (see [INTEGRATION.md](./INTEGRATION.md))
 
-# Iniciar los servicios con Docker Compose
-docker-compose up -d
+### Installation
 
-# Verificar que el backend esté corriendo
-curl http://localhost:8000/api/v1/health
-```
-
-El backend estará disponible en `http://localhost:8000`
-
-### Configuración de la API
-
-El frontend está configurado para conectarse al backend en `http://localhost:8000/api/v1`. Esta configuración se encuentra en `src/app/services/api.ts`:
-
-```typescript
-const API_BASE_URL = 'http://localhost:8000/api/v1';
-```
-
-Si necesitas cambiar la URL del backend, modifica esta variable.
-
-## Endpoints Disponibles
-
-El servicio de API (`src/app/services/api.ts`) proporciona los siguientes métodos:
-
-### Archivos
-- `uploadFile(file: File)`: Subir archivo al backend
-- `getFileMetadata(fileId: string)`: Obtener metadata de un archivo
-
-### Normalización
-- `normalizeImage(file: File, profileSource?, compareFile?, compareProfileJson?)`: Normalizar imagen de radiografía
-- `getProfileStatus(sampleSize?: number)`: Obtener estado de perfiles de normalización
-- `bootstrapProfiles()`: Inicializar perfiles de normalización
-
-### Salud
-- `checkHealth()`: Verificar estado del backend
-
-## Desarrollo
-
-### Instalación de Dependencias
+Dependencies are already installed. If you need to reinstall:
 
 ```bash
 pnpm install
 ```
 
-### Notas Importantes
+### Configuration
 
-1. **No ejecutar `vite build`**: Este es un proyecto de Figma Make, no una configuración estándar de Vite
-2. **El servidor Vite ya está corriendo**: No es necesario iniciar el dev server manualmente
-3. **Entrypoint automático**: El archivo `__figma__entrypoint__.ts` se genera automáticamente
+1. Copy the environment example:
+   ```bash
+   cp .env.example .env
+   ```
 
-## Uso de la Aplicación
+2. Update the backend API URL in `.env`:
+   ```
+   VITE_API_URL=http://localhost:8000/api/v1
+   ```
 
-1. **Cargar imagen**: 
-   - Arrastra una radiografía al área de carga
-   - O haz clic en "Seleccionar archivo"
+### Running the Application
 
-2. **Analizar imagen**:
-   - Una vez cargada la imagen, haz clic en "Analizar imagen"
-   - El sistema enviará la imagen al backend para normalización
+The Vite dev server is managed by Figma Make and runs automatically.
 
-3. **Ver resultados**:
-   - Usa las pestañas para cambiar entre vistas
-   - Revisa las mediciones en la tabla
-   - Explora la visualización 3D arrastrando el mouse
+If you need to run it manually:
+```bash
+pnpm run dev
+```
 
-4. **Generar reporte**:
-   - Haz clic en "Descargar reporte" para obtener un PDF (próximamente)
+## Project Structure
 
-## Componentes Principales
+```
+src/
+├── app/
+│   ├── App.tsx                    # Main application component
+│   ├── config.ts                  # API configuration
+│   ├── types.ts                   # TypeScript type definitions
+│   └── components/
+│       ├── PatientUploadPanel.tsx # Patient info & image upload
+│       ├── SpineDiagram.tsx       # Interactive spine visualization
+│       ├── ImageAnalysisPanel.tsx # Image display with tabs
+│       └── PredictionResults.tsx  # Clinical metrics display
+├── imports/                        # Asset imports (Figma frames, etc.)
+└── styles/                         # CSS and theme files
+```
 
-### FileUpload
-Componente de carga de archivos con soporte drag-and-drop.
+## Backend Integration
 
-### ImageViewer
-Visor de imágenes con controles de zoom y rotación para radiografías médicas.
+### Current Status
 
-### SpineDiagram
-Visualización SVG de la columna vertebral con resaltado de vértebras específicas.
+The frontend uses **mock data** for demonstration purposes. To get real predictions:
 
-### MeasurementsTable
-Tabla de mediciones con indicadores de estado (normal, advertencia, crítico).
+1. **Start the MAIA-SPINE backend**
+   ```bash
+   cd path/to/MAIA-SPINE-ANATOMIC_MANIFOLD_CNN_TDA/back
+   docker-compose up
+   ```
 
-### HeatmapVisualization
-Canvas interactivo que muestra un mapa de calor 3D de la columna vertebral.
+2. **Create the analysis endpoint** (see [BACKEND_CONNECTION.md](./BACKEND_CONNECTION.md))
 
-## Datos de Ejemplo
+3. **Update the frontend** to call the real endpoint
 
-La aplicación incluye datos de muestra para demostración:
+For detailed integration instructions, see:
+- [INTEGRATION.md](./INTEGRATION.md) - Complete integration guide
+- [BACKEND_CONNECTION.md](./BACKEND_CONNECTION.md) - Backend endpoint setup
 
-- Mediciones de ángulos (Cobb, inclinación pélvica, lordosis, cifosis)
-- Vértebras resaltadas (T8, T9, T10, L1)
-- Escala de colores para intensidad del mapa de calor
+## API Endpoints Used
 
-## Arquitectura Backend
+The frontend connects to these backend endpoints:
 
-El backend utiliza:
-- **FastAPI**: Framework web
-- **MongoDB**: Almacenamiento de metadata
-- **Redis**: Cache de perfiles
-- **LocalStack S3**: Almacenamiento de archivos
-- **Docker Compose**: Orquestación de servicios
+- `POST /api/v1/patients` - Upload patient data and X-ray image
+- `POST /api/v1/normalization/image` - Normalize and preprocess image
+- `POST /api/v1/spine/analyze` - (To be created) Run full ML pipeline
 
-Ver el repositorio backend para más detalles: https://github.com/oesquivel81/MAIA-SPINE-ANATOMIC_MANIFOLD_CNN_TDA.git
+## Development
 
-## Próximas Funcionalidades
+### Key Components
 
-- [ ] Generación de reportes PDF
-- [ ] Comparación de imágenes antes/después
-- [ ] Historial de análisis
-- [ ] Exportación de mediciones a CSV
-- [ ] Integración con sistema de perfiles personalizados
+**PatientUploadPanel**
+- Handles file upload and patient data collection
+- Sends data to backend
+- Shows loading states and error messages
 
-## Licencia
+**SpineDiagram**
+- Displays vertebrae from C1 to S5
+- Highlights affected regions
+- Interactive hover effects
 
-Ver el repositorio principal para información de licencia.
+**ImageAnalysisPanel**
+- Tabbed interface for different image views
+- Supports original, processed, and heatmap views
+- Loading states during analysis
+
+**PredictionResults**
+- Displays clinical metrics (Cobb angle, severity, etc.)
+- Shows analysis pipeline steps
+- Action buttons for downloads and exports
+
+### Type Definitions
+
+All API response types are defined in `src/app/types.ts`:
+- `AnalysisData` - Complete analysis result
+- `PipelineImages` - Generated image paths
+- `PipelinePredictions` - Clinical predictions
+- `GapSummary` - Vertebrae gap metrics
+
+## Customization
+
+### Changing the Theme
+
+Edit `src/app/App.tsx` to modify the Material-UI theme:
+
+```typescript
+const darkTheme = createTheme({
+  palette: {
+    mode: "dark",
+    primary: { main: "#3b82f6" },
+    background: {
+      default: "#0a0e1a",
+      paper: "#131829",
+    },
+  },
+});
+```
+
+### Adding New Metrics
+
+1. Update types in `src/app/types.ts`
+2. Add fields to the display in `PredictionResults.tsx`
+3. Ensure backend returns the new data
+
+## Troubleshooting
+
+### Backend Connection Issues
+
+**CORS Errors:**
+- Verify CORS is enabled in the backend
+- Check that frontend URL is allowed in `allow_origins`
+
+**Connection Refused:**
+- Ensure backend is running: `curl http://localhost:8000/api/v1/health`
+- Verify the API URL in `.env`
+
+### Image Display Issues
+
+**Images not showing:**
+- Check that image paths from backend are accessible
+- Verify static file serving is configured
+- Use browser DevTools to inspect network requests
+
+**Slow Loading:**
+- ML pipeline can take 30-60 seconds
+- Loading indicator will show during processing
+
+## Architecture
+
+```
+┌─────────────────┐
+│   User Browser  │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  React Frontend │ (This application)
+│   - Upload UI   │
+│   - Display     │
+│   - Validation  │
+└────────┬────────┘
+         │ HTTP/REST
+         ▼
+┌─────────────────┐
+│  FastAPI Backend│
+│   - Upload      │
+│   - ML Pipeline │
+│   - Storage     │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  ML Pipeline    │
+│   - CNN Models  │
+│   - GMM Cluster │
+│   - TDA         │
+└─────────────────┘
+```
+
+## License
+
+This frontend application is part of the MAIA-SPINE project. Check the main repository for license information.
+
+## Support
+
+For issues related to:
+- **Frontend UI/UX**: Create an issue in this repository
+- **Backend/ML Pipeline**: Refer to the MAIA-SPINE repository
+- **Integration**: See [INTEGRATION.md](./INTEGRATION.md)
+
+## Acknowledgments
+
+Built with:
+- Material-UI for components
+- React for UI framework
+- Vite for development experience
+- TypeScript for type safety
+
+Designed to match the clinical workflow and visual style of professional radiology software.
