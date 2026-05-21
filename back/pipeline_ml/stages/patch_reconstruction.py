@@ -232,8 +232,42 @@ class PatchReconstructionStage(PipelineStage):
         sp = out_root / "support_map.png"
         cv2.imwrite(str(sp), support_map * 255)
 
+        # PNG con fondo blanco: píxeles fuera del soporte A∪B → 255
         cs_p = out_root / "combined_signal.png"
-        cv2.imwrite(str(cs_p), (combined_signal.clip(0.0, 1.0) * 255).astype(np.uint8))
+        _cs_gray = (combined_signal.clip(0.0, 1.0) * 255).astype(np.uint8)
+        _cs_white = np.where(support_map.astype(bool), _cs_gray, np.uint8(255))
+        cv2.imwrite(str(cs_p), _cs_white)
+
+        # CSV de estadísticas de la señal combinada (dentro del soporte)
+        cs_csv_p = out_root / "combined_signal_stats.csv"
+        _sup_bool = support_map.astype(bool)
+        _sup_area_pct = round(float(_sup_bool.mean()) * 100, 4)
+        _cs_csv_rows: list[dict] = []
+        for _h in _HEADS:
+            _vals = recon_maps[_h][_sup_bool]
+            _cs_csv_rows.append({
+                "source":           _h,
+                "mean_in_support":  round(float(_vals.mean()), 6) if _vals.size else 0.0,
+                "std_in_support":   round(float(_vals.std()),  6) if _vals.size else 0.0,
+                "max_value":        round(float(_vals.max()),  6) if _vals.size else 0.0,
+                "coverage_pct_0_5": round(float(np.mean(_vals >= 0.5)) * 100, 4) if _vals.size else 0.0,
+                "support_area_pct": _sup_area_pct,
+            })
+        _cs_vals = combined_signal[_sup_bool]
+        _cs_csv_rows.append({
+            "source":           "combined",
+            "mean_in_support":  round(float(_cs_vals.mean()), 6) if _cs_vals.size else 0.0,
+            "std_in_support":   round(float(_cs_vals.std()),  6) if _cs_vals.size else 0.0,
+            "max_value":        round(float(_cs_vals.max()),  6) if _cs_vals.size else 0.0,
+            "coverage_pct_0_5": round(float(np.mean(_cs_vals >= 0.5)) * 100, 4) if _cs_vals.size else 0.0,
+            "support_area_pct": _sup_area_pct,
+        })
+        _cs_fields = ["source", "mean_in_support", "std_in_support", "max_value",
+                      "coverage_pct_0_5", "support_area_pct"]
+        with open(cs_csv_p, "w", newline="", encoding="utf-8") as _fh:
+            _cw = csv.DictWriter(_fh, fieldnames=_cs_fields)
+            _cw.writeheader()
+            _cw.writerows(_cs_csv_rows)
 
         logger.info(
             f"PatchReconstructionStage: señal combinada guardada → {cs_p}"
@@ -427,17 +461,25 @@ class PatchReconstructionStage(PipelineStage):
         principales (pesos altos). ``ordinal`` aporta información de orden
         con peso menor.
 
+        El soporte es la **unión** A∪B:
+            A = binary_n > 0.30  (estructura espinal detectada)
+            B = coverage_map > 0 (cubierto por al menos un parche)
+        Solo se excluyen los píxeles completamente fuera de la columna
+        (fondo negro sin ningún parche).
+
         Returns:
-            support_map:     uint8 {0,1}  — máscara de soporte
-            combined_signal: float32      — señal ponderada (puede superar 1.0
-                                            ligeramente; clipear al guardar PNG)
+            support_map:     uint8 {0,1}  — máscara de soporte (A∪B)
+            combined_signal: float32      — señal ponderada dentro del soporte
+                                            (puede superar 1.0 ligeramente;
+                                            clipear al guardar PNG)
         """
         binary_n        = recon_maps["binary"]
         boundary_n      = recon_maps["boundary"]
         inter_n         = recon_maps["intervertebral"]
         ordinal_n       = recon_maps["ordinal"]
 
-        support = ((binary_n > 0.30) & (coverage_map > 0)).astype(np.uint8)
+        # A∪B: incluye todo píxel con estructura espinal O cubierto por parches
+        support = ((binary_n > 0.30) | (coverage_map > 0)).astype(np.uint8)
 
         signal_weighted = (
             0.55 * boundary_n +
