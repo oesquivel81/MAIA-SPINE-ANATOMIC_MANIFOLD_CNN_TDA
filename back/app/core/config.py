@@ -45,6 +45,13 @@ class Settings(BaseSettings):
     pipeline_publish_events_to_kafka: bool = False
     pipeline_mongo_collection: str = "pipeline_stage_metrics"
 
+    # Pipeline B — rutas de modelos (S3 key o path local absoluto)
+    # S3 key:  experiments/v02A/pipeline_model/01_binary_curve_cnn/last_binary_curve_model.pt
+    # Local:   /content/experiments/...  (Colab — nunca se usa en EKS)
+    pipeline_binary_curve_model_path: str = ""
+    pipeline_student_patch_model_path: str = ""
+    pipeline_models_local_dir: str = "/tmp/pipeline_models"
+
     model_config = SettingsConfigDict(
         env_file=("application.properties", ".env"),
         env_file_encoding="utf-8",

@@ -13,11 +13,30 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 import numpy as np
 
+from pathlib import Path
+
+import boto3
+
 from app.core.config import Settings, get_settings
 from pipeline_ml.config import DebugFlags, PipelineConfig, PipelinePaths, RoutingFlags
 from pipeline_ml.entrypoint import PipelineML
 
 router = APIRouter()
+
+
+def _resolve_model_path(path: str, bucket: str, region: str, cache_dir: str) -> str:
+    """Si path es una S3 key (sin '/'), descarga al cache y retorna la ruta local.
+    Si path empieza con '/' se asume local (Colab). Si está vacío retorna ''."""
+    if not path:
+        return ""
+    if path.startswith("/"):
+        return path  # path local absoluto — modo Colab, no tocar
+    local = Path(cache_dir) / Path(path).name
+    if not local.exists():
+        local.parent.mkdir(parents=True, exist_ok=True)
+        s3 = boto3.client("s3", region_name=region)
+        s3.download_file(bucket, path, str(local))
+    return str(local)
 
 
 def _build_pipeline(settings: Settings) -> PipelineML:
@@ -43,6 +62,18 @@ def _build_pipeline(settings: Settings) -> PipelineML:
             mongo_collection=settings.pipeline_mongo_collection,
             kafka_bootstrap_servers=settings.kafka_bootstrap_servers,
             kafka_topic_prefix=settings.kafka_topic_prefix,
+            binary_curve_model_path=_resolve_model_path(
+                settings.pipeline_binary_curve_model_path,
+                settings.aws_s3_bucket,
+                settings.aws_region,
+                settings.pipeline_models_local_dir,
+            ),
+            student_patch_model_path=_resolve_model_path(
+                settings.pipeline_student_patch_model_path,
+                settings.aws_s3_bucket,
+                settings.aws_region,
+                settings.pipeline_models_local_dir,
+            ),
         ),
     )
     return PipelineML(config=config)

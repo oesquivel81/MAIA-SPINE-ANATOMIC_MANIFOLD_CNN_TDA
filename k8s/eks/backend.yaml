@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: 847964925141.dkr.ecr.us-east-1.amazonaws.com/maia-dev-ecr:backend-dev
+          image: 360879159958.dkr.ecr.us-east-1.amazonaws.com/maia-dev-ecr:backend-dev
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
@@ -30,6 +30,10 @@ spec:
               value: "8000"
             - name: AWS_REGION
               value: us-east-1
+            - name: AWS_S3_BUCKET
+              value: maia-dev-artifacts-37e567a4
+            - name: AWS_S3_ENDPOINT_URL
+              value: ""
             - name: MONGO_URI
               value: mongodb://mongo:27017
             - name: MONGO_DB
@@ -38,6 +42,22 @@ spec:
               value: file_metadata
             - name: REDIS_URI
               value: redis://redis:6379/0
+            - name: NORMALIZATION_BOOTSTRAP_ON_STARTUP
+              value: "false"
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: kafka:9092
+            - name: PIPELINE_INSTANCE_MODE
+              value: "true"
+            - name: PIPELINE_WRITE_METRICS_TO_MONGO
+              value: "true"
+            - name: PIPELINE_PUBLISH_EVENTS_TO_KAFKA
+              value: "true"
+            - name: PIPELINE_BINARY_CURVE_MODEL_PATH
+              value: experiments/v02A/pipeline_model/01_binary_curve_cnn/last_binary_curve_model.pt
+            - name: PIPELINE_STUDENT_PATCH_MODEL_PATH
+              value: experiments/v02A/pipeline_model/02_student_1ch_4heads/student_1ch_multihead_ALL_FINETUNES_CHECKOUTS_20260520_004121_current_loaded_full_checkpoint.pt
+            - name: PIPELINE_MODELS_LOCAL_DIR
+              value: /tmp/pipeline_models
           readinessProbe:
             httpGet:
               path: /api/v1/health
