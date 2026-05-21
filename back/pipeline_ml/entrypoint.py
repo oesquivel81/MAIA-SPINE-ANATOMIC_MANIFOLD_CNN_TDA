@@ -201,7 +201,7 @@ class PipelineML:
             kafka_flush = self.async_kafka_stage_publisher.flush()
             metrics["stage_sinks"] = {"mongo_flush": mongo_flush, "kafka_flush": kafka_flush}
 
-        # ── JSON clínico consolidado ───────────────────────────────────
+        # ── JSON clínico consolidado  FIX───────────────────────────────────
         clinical_result = _build_clinical_result(req_id, assets.full_name, payload)
         outputs["clinical_result"] = clinical_result
         clinical_json_path = context.outputs_dir / "clinical_result.json"

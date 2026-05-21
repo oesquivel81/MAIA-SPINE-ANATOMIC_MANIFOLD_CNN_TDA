@@ -15,3 +15,4 @@ api_v1_router.include_router(normalization_router, prefix="/normalization", tags
 api_v1_router.include_router(patient_router, prefix="/patients", tags=["patients"])
 api_v1_router.include_router(pipeline_router, prefix="/pipeline", tags=["pipeline"])
 api_v1_router.include_router(spine_router, prefix="/spine", tags=["spine-analysis"])
+
