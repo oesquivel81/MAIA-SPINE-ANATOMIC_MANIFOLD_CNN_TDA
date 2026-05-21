@@ -160,7 +160,16 @@ class InferenceStage(PipelineStage):
             payload["inference_done"] = False
             return payload
 
-        bundle = self._load_cluster_bundle(cluster_path)
+        try:
+            bundle = self._load_cluster_bundle(cluster_path)
+        except Exception as exc:
+            logger.warn(
+                f"InferenceStage: fallo al cargar bundle de clustering: {exc}. "
+                f"Saltando prediccion GMM."
+            )
+            payload["inference_done"] = False
+            payload["inference_error"] = str(exc)
+            return payload
         feature_cols: list[str] = bundle["feature_cols"]
 
         # ── Construir features ─────────────────────────────────────────
@@ -222,7 +231,32 @@ class InferenceStage(PipelineStage):
     @staticmethod
     def _load_cluster_bundle(joblib_path: Path) -> dict:
         import joblib
-        bundle = joblib.load(str(joblib_path))
+        import pickle
+
+        # Intento 1: joblib nativo
+        try:
+            bundle = joblib.load(str(joblib_path))
+        except Exception as e_joblib:
+            # Intento 2: pickle directo con encoding latin-1 (compatibilidad Python 2)
+            try:
+                with open(str(joblib_path), "rb") as fh:
+                    bundle = pickle.load(fh, encoding="latin-1")
+            except Exception:
+                # Intento 3: pickle directo con encoding bytes
+                try:
+                    with open(str(joblib_path), "rb") as fh:
+                        bundle = pickle.load(fh, encoding="bytes")
+                except Exception:
+                    raise RuntimeError(
+                        f"No se pudo cargar el bundle de clustering desde "
+                        f"'{joblib_path}'.\n"
+                        f"Error original de joblib: {e_joblib}\n"
+                        f"Probable causa: el archivo fue guardado con una version "
+                        f"incompatible de joblib/Python.\n"
+                        f"Solucion: re-exportar el bundle en el entorno actual con:\n"
+                        f"  import joblib; joblib.dump(bundle, '{joblib_path}')"
+                    ) from e_joblib
+
         assert "feature_cols" in bundle, "bundle debe contener 'feature_cols'"
         assert "best_model"   in bundle, "bundle debe contener 'best_model'"
         return bundle
