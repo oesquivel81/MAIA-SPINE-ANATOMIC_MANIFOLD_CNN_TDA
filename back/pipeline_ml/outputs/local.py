@@ -19,6 +19,23 @@ class _SafeEncoder(json.JSONEncoder):
             return float(obj)
         if isinstance(obj, (np.bool_,)):
             return bool(obj)
+        # pandas DataFrame / Series — ya guardados como CSV; solo resumen
+        type_name = type(obj).__name__
+        if type_name == "DataFrame":
+            return {
+                "__dataframe__": True,
+                "shape": list(obj.shape),
+                "columns": list(obj.columns),
+            }
+        if type_name == "Series":
+            return {"__series__": True, "name": obj.name, "len": len(obj)}
+        # Path objects
+        try:
+            from pathlib import PurePath
+            if isinstance(obj, PurePath):
+                return str(obj)
+        except Exception:
+            pass
         return super().default(obj)
 
 
