@@ -232,10 +232,14 @@ class PatchReconstructionStage(PipelineStage):
         sp = out_root / "support_map.png"
         cv2.imwrite(str(sp), support_map * 255)
 
-        # PNG con fondo blanco: píxeles fuera del soporte A∪B → 255
+        # PNG (A∩B) \ vertebra: fondo blanco donde no hay soporte o señal < umbral
+        # El umbral _SIGNAL_VIZ_THR = 0.06 deja en blanco los cuerpos vertebrales
+        # (inter y boundary ~0 dentro del cuerpo), mostrando solo bordes y gaps.
+        _SIGNAL_VIZ_THR = 0.06
         cs_p = out_root / "combined_signal.png"
-        _cs_gray = (combined_signal.clip(0.0, 1.0) * 255).astype(np.uint8)
-        _cs_white = np.where(support_map.astype(bool), _cs_gray, np.uint8(255))
+        _cs_gray  = (combined_signal.clip(0.0, 1.0) * 255).astype(np.uint8)
+        _viz_mask = support_map.astype(bool) & (combined_signal >= _SIGNAL_VIZ_THR)
+        _cs_white = np.where(_viz_mask, _cs_gray, np.uint8(255))
         cv2.imwrite(str(cs_p), _cs_white)
 
         # CSV de estadísticas de la señal combinada (dentro del soporte)
@@ -461,14 +465,18 @@ class PatchReconstructionStage(PipelineStage):
         principales (pesos altos). ``ordinal`` aporta información de orden
         con peso menor.
 
-        El soporte es la **unión** A∪B:
+        El soporte es la **intersección** A∩B:
             A = binary_n > 0.30  (estructura espinal detectada)
             B = coverage_map > 0 (cubierto por al menos un parche)
-        Solo se excluyen los píxeles completamente fuera de la columna
-        (fondo negro sin ningún parche).
+        Esto evita incluir los parches cuadrados fuera de la columna
+        (A∪B incluiría regiones sin señal que aparecerían como cuadros negros).
+
+        Para la visualización PNG se aplica además un umbral mínimo de señal
+        (``_SIGNAL_VIZ_THR``) que deja en blanco los cuerpos vertebrales
+        (baja señal dentro del soporte): efecto (A∩B) \ vertebra.
 
         Returns:
-            support_map:     uint8 {0,1}  — máscara de soporte (A∪B)
+            support_map:     uint8 {0,1}  — máscara de soporte (A∩B)
             combined_signal: float32      — señal ponderada dentro del soporte
                                             (puede superar 1.0 ligeramente;
                                             clipear al guardar PNG)
@@ -478,8 +486,8 @@ class PatchReconstructionStage(PipelineStage):
         inter_n         = recon_maps["intervertebral"]
         ordinal_n       = recon_maps["ordinal"]
 
-        # A∪B: incluye todo píxel con estructura espinal O cubierto por parches
-        support = ((binary_n > 0.30) | (coverage_map > 0)).astype(np.uint8)
+        # A∩B: solo píxeles con estructura espinal detectada Y cubiertos por parches
+        support = ((binary_n > 0.30) & (coverage_map > 0)).astype(np.uint8)
 
         signal_weighted = (
             0.55 * boundary_n +
