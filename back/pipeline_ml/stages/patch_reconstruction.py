@@ -343,6 +343,8 @@ class PatchReconstructionStage(PipelineStage):
         payload["coverage_map"] = coverage_map
         payload["support_map"] = support_map
         payload["combined_signal"] = combined_signal
+        payload["combined_signal_path"] = str(cs_p)
+        payload["analysis_grid_path"] = str(ag_p)
         payload["vertical_profiles"] = profiles
         payload["gap_analysis"] = gap_analysis
         payload["spatial_index"] = spatial_index
