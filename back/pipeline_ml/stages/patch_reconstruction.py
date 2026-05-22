@@ -367,28 +367,6 @@ class PatchReconstructionStage(PipelineStage):
         cv2.imwrite(str(cs_rt), _cs_u8)
         debug_images["combined_gap_signal"] = str(cs_rt)
 
-        # ── peaks_gaps_overlay_runtime.png ────────────────────────────
-        _pg_path = out_root / "peaks_gaps_overlay_runtime.png"
-        try:
-            _img8 = image.copy()
-            if _img8.dtype != np.uint8:
-                _img8 = (_img8 * 255).clip(0, 255).astype(np.uint8) if _img8.max() <= 1.0 else np.clip(_img8, 0, 255).astype(np.uint8)
-            if _img8.ndim == 2:
-                _canvas = cv2.cvtColor(_img8, cv2.COLOR_GRAY2BGR)
-            else:
-                _canvas = _img8.copy()
-            _df_ev = gap_analysis.get("df_events")
-            if _df_ev is not None and not _df_ev.empty:
-                for _, _ev in _df_ev.iterrows():
-                    _y = int(float(_ev.get("curve_idx", _ev.get("y", 0))))
-                    _kind = str(_ev.get("kind", ""))
-                    _color = (0, 255, 0) if _kind == "peak" else (0, 0, 255)
-                    cv2.line(_canvas, (0, _y), (_canvas.shape[1] - 1, _y), _color, 1)
-            cv2.imwrite(str(_pg_path), _canvas)
-            debug_images["peaks_gaps_overlay"] = str(_pg_path)
-        except Exception as _e:
-            logger.warn(f"PatchReconstructionStage: no se pudo guardar peaks_gaps_overlay: {_e}")
-
         df_events = gap_analysis.get("df_events")
         df_profile = gap_analysis.get("df_profile")
 

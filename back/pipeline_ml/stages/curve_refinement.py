@@ -92,124 +92,27 @@ class CurveRefinementStage(PipelineStage):
         img01 = self._normalize01(image)
         H, W = img01.shape
 
-        # ---------------------------------------------------------------
-        # 1. Validar binary_mask y ajustar tamaño
-        # ---------------------------------------------------------------
-        if binary_mask is None:
-            logger.warn(
-                "!!! CurveRefinementStage: binary_mask NO encontrada en payload. Stage saltado."
-            )
-            payload["curve_refinement_skipped"] = True
-            return payload
-
-        if binary_mask.shape != (H, W):
-            binary_mask = cv2.resize(
-                binary_mask.astype(np.float32), (W, H), interpolation=cv2.INTER_NEAREST
-            )
-
-        bm_max = float(binary_mask.max())
-        logger.debug(
-            f"CurveRefinementStage: img={img01.shape}, "
-            f"binary_mask max={bm_max:.3f}, coverage (>0)={(binary_mask > 0).mean() * 100:.1f}%"
-        )
-
-        # ---------------------------------------------------------------
-        # 2. Binarizar con threshold adaptable + morfología + componente mayor
-        #    Si el mapa es float [0,1] → threshold 0.35
-        #    Si es uint8 [0,255] → threshold 0.35 * 255
-        # ---------------------------------------------------------------
-        bm_thr = 0.35 if bm_max <= 1.0 else (0.35 * 255.0)
-        mask_bin = (binary_mask >= bm_thr).astype(np.uint8)
-        logger.debug(
-            f"CurveRefinementStage: threshold={bm_thr:.1f} → coverage={mask_bin.mean() * 100:.1f}%"
-        )
-
-        _kernel5 = np.ones((5, 5), np.uint8)
-        mask_bin = cv2.morphologyEx(mask_bin, cv2.MORPH_CLOSE, _kernel5)
-        mask_bin = cv2.morphologyEx(mask_bin, cv2.MORPH_OPEN,  _kernel5)
-
-        num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(mask_bin, connectivity=8)
-        if num_labels > 1:
-            areas = stats[1:, cv2.CC_STAT_AREA]
-            largest_label = 1 + int(np.argmax(areas))
-            mask_bin = (labels == largest_label).astype(np.uint8)
-            logger.debug(
-                f"CurveRefinementStage: componente mayor seleccionado "
-                f"(área={areas[largest_label - 1]:.0f} px, de {num_labels - 1} componentes)"
-            )
-
-        binary_refined = mask_bin.copy()
-        logger.debug(
-            f"CurveRefinementStage: binary_clean coverage={binary_refined.mean() * 100:.1f}%"
-        )
-
-        # Si la máscara limpia queda vacía, caer en threshold permisivo > 0
-        if binary_refined.sum() < 50:
-            logger.warn(
-                f"CurveRefinementStage: máscara limpia muy pequeña ({int(binary_refined.sum())} px). "
-                "Usando binary_mask > 0 como fallback para binary_refined."
-            )
-            binary_refined = (binary_mask > 0).astype(np.uint8)
-            if binary_refined.shape != (H, W):
-                binary_refined = cv2.resize(binary_refined, (W, H), interpolation=cv2.INTER_NEAREST)
-
-        # ---------------------------------------------------------------
-        # 3. Skeleton — sólo como auxiliar / prior opcional para DP
-        #    Nunca es la ruta principal; se ignora si cubre < 30 % de altura
-        # ---------------------------------------------------------------
-        skel = np.zeros((H, W), dtype=np.uint8)
-        skeleton_prior_ys: np.ndarray | None = None
-        skeleton_prior_xs: np.ndarray | None = None
-
-        if binary_refined.sum() >= 50:
-            try:
-                from skimage.morphology import skeletonize as _skeletonize
-                skel = _skeletonize(binary_refined > 0).astype(np.uint8)
-
-                _skel_ys: list[int]   = []
-                _skel_xs: list[float] = []
-                for _y in range(H):
-                    _xx = np.where(skel[_y] > 0)[0]
-                    if len(_xx) >= 1:
-                        _skel_ys.append(_y)
-                        _skel_xs.append(float(np.median(_xx)))
-
-                skel_height_coverage = len(_skel_ys) / H if H > 0 else 0.0
-                if len(_skel_ys) >= 20 and skel_height_coverage >= 0.30:
-                    _ys_s = np.asarray(_skel_ys, dtype=np.float32)
-                    _xs_s = np.asarray(_skel_xs, dtype=np.float32)
-                    _yf   = np.arange(int(_ys_s.min()), int(_ys_s.max()) + 1, dtype=np.float32)
-                    _xf   = np.interp(_yf, _ys_s, _xs_s)
-                    _xf   = gaussian_filter1d(_xf, sigma=4)
-                    _xf   = np.clip(_xf, 0, W - 1)
-                    skeleton_prior_ys = _yf.astype(np.int32)
-                    skeleton_prior_xs = _xf.astype(np.float32)
-                    logger.debug(
-                        f"CurveRefinementStage: skeleton prior válido "
-                        f"({len(_skel_ys)} filas, {skel_height_coverage * 100:.1f}% height)"
-                    )
-                else:
-                    logger.debug(
-                        f"CurveRefinementStage: skeleton insuficiente "
-                        f"({len(_skel_ys)} filas, {skel_height_coverage * 100:.1f}% height) "
-                        "→ ignorado, DP usará mediana"
-                    )
-            except Exception as _e:
-                logger.warn(f"CurveRefinementStage: skeleton falló ({_e}) → ignorado")
-
-        # ---------------------------------------------------------------
-        # 4. Likelihood anatómico (ruta principal DP — igual que antes)
-        #    likelihood = 0.62·(CLAHE+Scharr) + 0.18·banda_binaria + 0.20·bonus_curva
-        # ---------------------------------------------------------------
+        # Normalizar máscaras y ajustar tamaño si difiere
+        binary_refined = (binary_mask > 0).astype(np.uint8)
         curve_prob = self._normalize01(curve_mask.astype(np.float32))
+
+        if binary_refined.shape != (H, W):
+            binary_refined = cv2.resize(binary_refined, (W, H), interpolation=cv2.INTER_NEAREST)
         if curve_prob.shape != (H, W):
             curve_prob = cv2.resize(curve_prob, (W, H), interpolation=cv2.INTER_LINEAR)
 
+        logger.debug(
+            f"CurveRefinementStage: img={img01.shape}, "
+            f"binary_coverage={binary_refined.mean() * 100:.1f}%"
+        )
+
+        # --- 1. Mapa de likelihood anatómica ---
         image_likelihood, _img_clahe, _grad = self._make_image_likelihood(img01)
+
         curve_bonus = gaussian_filter(self._normalize01(curve_prob), sigma=2.0)
 
-        _kernel_dil = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (45, 45))
-        binary_band = cv2.dilate(binary_refined, _kernel_dil, iterations=1)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (45, 45))
+        binary_band = cv2.dilate(binary_refined, kernel, iterations=1)
         binary_band = self._normalize01(binary_band.astype(np.float32))
 
         likelihood_final = (
@@ -220,211 +123,126 @@ class CurveRefinementStage(PipelineStage):
         likelihood_final = gaussian_filter(likelihood_final, sigma=1.2)
         likelihood_final = self._normalize01(likelihood_final)
 
-        # ---------------------------------------------------------------
-        # 5. Prior curve: skeleton si disponible, si no mediana de binary_refined
-        # ---------------------------------------------------------------
-        curve_source: str = "dp"
-        prior_ys: np.ndarray | None = None
-        prior_xs: np.ndarray | None = None
+        logger.debug("CurveRefinementStage: likelihood calculado")
 
-        if skeleton_prior_ys is not None:
-            prior_ys    = skeleton_prior_ys
-            prior_xs    = skeleton_prior_xs
-            curve_source = "dp_guided_by_skeleton"
-            logger.debug("CurveRefinementStage: usando skeleton como prior para DP")
-        else:
-            prior_ys, prior_xs = self._centerline_from_mask(
-                binary_refined, min_pixels_per_row=3, smooth_sigma=10
-            )
-
-        if prior_ys is None:
-            # Intentar con máscara laxa como último recurso para el prior
-            _binary_loose = (binary_mask > 0).astype(np.uint8)
-            if _binary_loose.shape != (H, W):
-                _binary_loose = cv2.resize(_binary_loose, (W, H), interpolation=cv2.INTER_NEAREST)
-            prior_ys, prior_xs = self._centerline_from_mask(
-                _binary_loose, min_pixels_per_row=1, smooth_sigma=10
-            )
+        # --- 2. Curva inicial desde binaria ---
+        prior_ys, prior_xs = self._centerline_from_mask(
+            binary_refined, min_pixels_per_row=3, smooth_sigma=10
+        )
 
         if prior_ys is None:
             logger.warn(
-                "!!! CurveRefinementStage: no se pudo construir prior desde binary. Stage saltado."
+                "CurveRefinementStage: no se pudo construir curva inicial desde la binaria. "
+                "Stage saltado."
             )
             payload["curve_refinement_skipped"] = True
             return payload
 
-        # ---------------------------------------------------------------
-        # 6. Dynamic Programming — ruta principal
-        # ---------------------------------------------------------------
-        dp_ys: np.ndarray | None = None
-        dp_xs: np.ndarray | None = None
+        logger.debug(f"CurveRefinementStage: curva previa: {len(prior_ys)} puntos")
 
-        try:
-            dp_ys, dp_xs = self._dynamic_programming_curve(
-                likelihood=likelihood_final,
-                prior_ys=prior_ys,
-                prior_xs=prior_xs,
-                binary_mask=binary_refined,
-                search_radius=_DP_SEARCH_RADIUS,
-                smooth_lambda=_DP_SMOOTH_LAMBDA,
-                prior_lambda=_DP_PRIOR_LAMBDA,
-                binary_lambda=_DP_BINARY_LAMBDA,
-                center_lambda=_DP_CENTER_LAMBDA,
-            )
-            logger.debug(
-                f"CurveRefinementStage: DP completado, {len(dp_ys)} puntos, source={curve_source}"
-            )
-        except Exception as _e:
-            logger.warn(f"CurveRefinementStage: DP falló ({_e})")
+        # --- 3. Curva refinada por programación dinámica ---
+        dp_ys, dp_xs = self._dynamic_programming_curve(
+            likelihood=likelihood_final,
+            prior_ys=prior_ys,
+            prior_xs=prior_xs,
+            binary_mask=binary_refined,
+            search_radius=_DP_SEARCH_RADIUS,
+            smooth_lambda=_DP_SMOOTH_LAMBDA,
+            prior_lambda=_DP_PRIOR_LAMBDA,
+            binary_lambda=_DP_BINARY_LAMBDA,
+            center_lambda=_DP_CENTER_LAMBDA,
+        )
 
-        # ---------------------------------------------------------------
-        # 7. Fallback chain: skeleton → mediana → error explícito
-        # ---------------------------------------------------------------
-        if dp_ys is None:
-            if skeleton_prior_ys is not None:
-                dp_ys        = skeleton_prior_ys
-                dp_xs        = skeleton_prior_xs
-                curve_source = "skeleton_fallback"
-                logger.warn("CurveRefinementStage: DP falló → usando skeleton como fallback")
-            elif prior_ys is not None:
-                dp_ys        = prior_ys
-                dp_xs        = prior_xs
-                curve_source = "median_fallback"
-                logger.warn(
-                    "CurveRefinementStage: DP y skeleton fallaron → usando mediana como fallback"
-                )
-            else:
-                logger.warn(
-                    "!!! CurveRefinementStage: todos los métodos fallaron. Stage saltado."
-                )
-                payload["curve_refinement_skipped"] = True
-                return payload
-
-        # ---------------------------------------------------------------
-        # 8. Heatmap y máscara
-        # ---------------------------------------------------------------
         dp_heatmap = self._draw_curve_heatmap(img01.shape, dp_ys, dp_xs, thickness=6, blur_sigma=4)
-        dp_mask    = (dp_heatmap > _HEATMAP_THRESHOLD).astype(np.uint8)
+        dp_mask = (dp_heatmap > _HEATMAP_THRESHOLD).astype(np.uint8)
 
-        # ---------------------------------------------------------------
-        # 9. Guardar outputs
-        # ---------------------------------------------------------------
+        logger.debug(
+            f"CurveRefinementStage: curva DP lista, {len(dp_ys)} puntos, "
+            f"coverage={dp_mask.mean() * 100:.2f}%"
+        )
+
+        # --- 4. Guardar outputs ---
         out_dir = context.outputs_dir / "curve_refinement"
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        norm_path = out_dir / "00_normalized_image.png"
-        cv2.imwrite(str(norm_path), (img01 * 255).clip(0, 255).astype(np.uint8))
-
-        # binary_mask_runtime.png — máscara original del payload (sin limpiar)
-        _bm_save = binary_mask.astype(np.float32)
-        if bm_max > 1.0:
-            _bm_save = _bm_save / 255.0
-        cv2.imwrite(
-            str(out_dir / "binary_mask_runtime.png"),
-            (_bm_save * 255).clip(0, 255).astype(np.uint8),
+        prior_heatmap = self._draw_curve_heatmap(
+            img01.shape, prior_ys, prior_xs, thickness=5, blur_sigma=4
         )
-
-        # binary_mask_clean_runtime.png — después de threshold + morfología
-        cv2.imwrite(str(out_dir / "binary_mask_clean_runtime.png"), binary_refined * 255)
-
-        # binary_skeleton_runtime.png — skeleton (vacío si no disponible)
-        cv2.imwrite(str(out_dir / "binary_skeleton_runtime.png"), skel * 255)
-
-        self._save_png(binary_refined.astype(np.float32), out_dir / "08_binary_refined.png")
         self._save_png(image_likelihood,                  out_dir / "01_image_likelihood.png")
         self._save_png(binary_band,                       out_dir / "02_binary_band.png")
         self._save_png(curve_bonus,                       out_dir / "03_curve_bonus.png")
         self._save_png(likelihood_final,                  out_dir / "04_likelihood_final.png")
-
-        _prior_heatmap = self._draw_curve_heatmap(img01.shape, prior_ys, prior_xs, thickness=5, blur_sigma=4)
-        self._save_png(_prior_heatmap,             out_dir / "05_prior_curve.png")
-        self._save_png(dp_heatmap,                 out_dir / "06_curve_dp_heatmap.png")
-        self._save_png(dp_mask.astype(np.float32), out_dir / "07_curve_dp_mask.png")
+        self._save_png(prior_heatmap,                     out_dir / "05_prior_curve.png")
+        self._save_png(dp_heatmap,                        out_dir / "06_curve_dp_heatmap.png")
+        self._save_png(dp_mask.astype(np.float32),        out_dir / "07_curve_dp_mask.png")
+        self._save_png(binary_refined.astype(np.float32), out_dir / "08_binary_refined.png")
 
         np.save(out_dir / "curve_dp_heatmap.npy", dp_heatmap)
-        np.save(out_dir / "curve_dp_mask.npy",    dp_mask)
+        np.save(out_dir / "curve_dp_mask.npy", dp_mask)
 
-        overlay_path = out_dir / "refined_curve_overlay_runtime.png"
-        self._save_curve_overlay(img01, dp_ys, dp_xs, overlay_path)
-
-        combined_path = out_dir / "combined_masks_overlay_runtime.png"
-        self._save_combined_overlay(img01, binary_refined, dp_ys, dp_xs, combined_path)
-
-        binary_curve_overlay_path: Path | None = None
-        if skel.sum() > 0 and skeleton_prior_ys is not None:
-            binary_curve_overlay_path = out_dir / "binary_curve_overlay_runtime.png"
-            self._save_skeleton_curve_overlay(
-                img01, binary_refined, skel, dp_ys, dp_xs, binary_curve_overlay_path
-            )
-
-        # refined_curve_source.txt — fuente de la curva final
-        (out_dir / "refined_curve_source.txt").write_text(curve_source)
-
-        logger.info(f"CurveRefinementStage: overlays guardados → {out_dir}")
-
-        import pandas as pd  # lazy import
+        import pandas as pd  # lazy import — pandas no es requerido en todos los entornos
         df = pd.DataFrame({"y": dp_ys.astype(int), "x": dp_xs.astype(float)})
         csv_path = out_dir / "curve_dp_centerline.csv"
         df.to_csv(csv_path, index=False)
-        logger.info(f"CurveRefinementStage: curva guardada ({curve_source}) → {csv_path}")
+        logger.info(f"CurveRefinementStage: curva guardada en {csv_path}")
 
         metadata = {
-            "strategy": curve_source,
+            "strategy": "image_binary_curve_dynamic_programming_refinement",
             "request_id": context.request_id,
-            "curve_source": curve_source,
-            "skeleton_prior_used": skeleton_prior_ys is not None,
-            "skeleton_pixels": int(skel.sum()),
             "hyperparams": {
-                "search_radius":    _DP_SEARCH_RADIUS,
-                "smooth_lambda":    _DP_SMOOTH_LAMBDA,
-                "prior_lambda":     _DP_PRIOR_LAMBDA,
-                "binary_lambda":    _DP_BINARY_LAMBDA,
-                "center_lambda":    _DP_CENTER_LAMBDA,
+                "search_radius": _DP_SEARCH_RADIUS,
+                "smooth_lambda": _DP_SMOOTH_LAMBDA,
+                "prior_lambda": _DP_PRIOR_LAMBDA,
+                "binary_lambda": _DP_BINARY_LAMBDA,
+                "center_lambda": _DP_CENTER_LAMBDA,
                 "heatmap_threshold": _HEATMAP_THRESHOLD,
-                "bm_threshold":     bm_thr,
             },
-            "curve_points":        int(len(df)),
+            "curve_points": int(len(df)),
             "curve_mask_coverage": float(dp_mask.mean()),
-            "output_dir":          str(out_dir),
+            "output_dir": str(out_dir),
         }
         meta_path = out_dir / "curve_refinement_metadata.json"
         with open(meta_path, "w", encoding="utf-8") as f:
             json.dump(metadata, f, indent=2, ensure_ascii=False)
 
-        # Visualización opcional
+        # --- 5. Visualización ---
         if context.metadata.get("plots_show", False):
             self._show_refinement_grid(
                 img01, binary_refined, image_likelihood, binary_band,
-                curve_bonus, likelihood_final, prior_ys, prior_xs,
-                dp_ys, dp_xs, dp_heatmap, dp_mask,
+                curve_bonus, likelihood_final,
+                prior_ys, prior_xs, dp_ys, dp_xs, dp_heatmap, dp_mask,
             )
-            self._show_curve_heatmap(
-                img01, prior_ys, prior_xs, dp_ys, dp_xs, dp_heatmap, dp_mask
-            )
+            self._show_curve_heatmap(img01, prior_ys, prior_xs, dp_ys, dp_xs, dp_heatmap, dp_mask)
             self._show_curve_csv(str(csv_path), dp_ys, dp_xs)
 
-        # ---------------------------------------------------------------
-        # 10. Actualizar payload
-        # ---------------------------------------------------------------
-        payload["dp_ys"]                 = dp_ys
-        payload["dp_xs"]                 = dp_xs
-        payload["dp_heatmap"]            = dp_heatmap
-        payload["dp_mask"]               = dp_mask
-        payload["curve_csv_path"]        = str(csv_path)
-        payload["curve_meta_path"]       = str(meta_path)
+        # --- 6. Actualizar payload ---
+        payload["dp_ys"] = dp_ys
+        payload["dp_xs"] = dp_xs
+        payload["dp_heatmap"] = dp_heatmap
+        payload["dp_mask"] = dp_mask
+        payload["curve_csv_path"] = str(csv_path)
+        payload["curve_meta_path"] = str(meta_path)
         payload["curve_refinement_done"] = True
-        payload["dp_curve"]              = {"dp_ys": dp_ys.tolist(), "dp_xs": dp_xs.tolist()}
+
+        # --- 6b. Debug: imagen normalizada + overlay de curva ---
+        norm_path = out_dir / "00_normalized_image.png"
+        cv2.imwrite(str(norm_path), (img01 * 255).clip(0, 255).astype(np.uint8))
+
+        overlay_path = out_dir / "refined_curve_overlay_runtime.png"
+        self._save_curve_overlay(img01, dp_ys, dp_xs, overlay_path)
+
+        # Overlay combinado: normalized_image + binary_refined (azul) + DP curve (verde)
+        combined_path = out_dir / "combined_masks_overlay_runtime.png"
+        self._save_combined_overlay(img01, binary_refined, dp_ys, dp_xs, combined_path)
+        logger.info(f"CurveRefinementStage: overlays guardados → {out_dir}")
+
+        payload["dp_curve"] = {"dp_ys": dp_ys.tolist(), "dp_xs": dp_xs.tolist()}
 
         debug_images: dict = payload.get("debug_images", {})
         debug_images["normalized_image"]       = str(norm_path)
-        debug_images["binary_mask_raw"]        = str(out_dir / "binary_mask_runtime.png")
         debug_images["binary_refined"]         = str(out_dir / "08_binary_refined.png")
-        debug_images["binary_mask_clean"]      = str(out_dir / "binary_mask_clean_runtime.png")
-        debug_images["binary_skeleton"]        = str(out_dir / "binary_skeleton_runtime.png")
         debug_images["refined_curve_overlay"]  = str(overlay_path)
         debug_images["combined_masks_overlay"] = str(combined_path)
-        if binary_curve_overlay_path is not None:
-            debug_images["binary_curve_overlay"] = str(binary_curve_overlay_path)
         payload["debug_images"] = debug_images
 
         return payload
@@ -493,34 +311,6 @@ class CurveRefinementStage(PipelineStage):
         blue_layer[binary_refined > 0] = [180, 60, 0]  # BGR → azul
         canvas = cv2.addWeighted(canvas, 0.65, blue_layer, 0.35, 0)
         # Curva DP en verde encima
-        pts = np.stack([dp_xs.astype(np.int32), dp_ys.astype(np.int32)], axis=1)
-        cv2.polylines(canvas, [pts], isClosed=False, color=(0, 255, 0), thickness=2)
-        cv2.imwrite(str(path), canvas)
-
-    @staticmethod
-    def _save_skeleton_curve_overlay(
-        image: np.ndarray,
-        binary_clean: np.ndarray,
-        skel: np.ndarray,
-        dp_ys: np.ndarray,
-        dp_xs: np.ndarray,
-        path: Path,
-    ) -> None:
-        """Overlay: imagen gris + máscara limpia (azul) + skeleton (amarillo) + curva suave (verde)."""
-        img8 = image.copy()
-        if img8.dtype != np.uint8:
-            if img8.max() <= 1.0:
-                img8 = (img8 * 255).clip(0, 255).astype(np.uint8)
-            else:
-                img8 = np.clip(img8, 0, 255).astype(np.uint8)
-        canvas = cv2.cvtColor(img8, cv2.COLOR_GRAY2BGR)
-        # Máscara limpia en azul semitransparente
-        blue_layer = canvas.copy()
-        blue_layer[binary_clean > 0] = [180, 60, 0]
-        canvas = cv2.addWeighted(canvas, 0.70, blue_layer, 0.30, 0)
-        # Skeleton en amarillo
-        canvas[skel > 0] = [0, 220, 220]
-        # Curva suavizada en verde encima
         pts = np.stack([dp_xs.astype(np.int32), dp_ys.astype(np.int32)], axis=1)
         cv2.polylines(canvas, [pts], isClosed=False, color=(0, 255, 0), thickness=2)
         cv2.imwrite(str(path), canvas)
