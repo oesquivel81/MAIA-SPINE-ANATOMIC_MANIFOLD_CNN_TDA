@@ -4,12 +4,8 @@ from pydantic import BaseModel
 
 
 class PipelineImagesDTO(BaseModel):
-    combined_signal: str | None = None
     analysis_grid: str | None = None
     gap_peak_analysis: str | None = None
-    spatial_index_panel: str | None = None
-    binary_mask: str | None = None
-    curve_mask: str | None = None
     normalized_image: str | None = None
     patch_inputs: list[str] = []
 
