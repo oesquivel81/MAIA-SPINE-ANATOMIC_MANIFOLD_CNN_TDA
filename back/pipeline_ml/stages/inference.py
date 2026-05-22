@@ -510,12 +510,19 @@ class InferenceStage(PipelineStage):
         signal = df_profile["profile_gap_score_smooth"].values.astype(np.float32)
 
         x_center = image_w / 2.0
-        if signal.max() > signal.min():
-            s = (signal - signal.min()) / (signal.max() - signal.min() + 1e-8)
+        signal_range = float(signal.max() - signal.min())
+        if signal_range > 1e-8:
+            s = (signal - signal.min()) / (signal_range + 1e-8)
         else:
             s = np.zeros_like(signal)
 
-        x      = x_center + (s - s.mean()) * (image_w * 0.08)
+        # Dampen displacement for low-variance signals (flat/normal spines).
+        # Signals with range < _FLAT_SIGNAL_THRESHOLD are treated as nearly flat,
+        # reducing spurious Cobb estimates caused by normal disc-space variation.
+        _FLAT_SIGNAL_THRESHOLD = 0.30
+        strength = min(1.0, signal_range / _FLAT_SIGNAL_THRESHOLD)
+
+        x      = x_center + (s - s.mean()) * (image_w * 0.08) * strength
         dx     = np.gradient(x)
         dy     = np.gradient(y)
         angles = np.degrees(np.arctan(dx / (dy + 1e-8)))

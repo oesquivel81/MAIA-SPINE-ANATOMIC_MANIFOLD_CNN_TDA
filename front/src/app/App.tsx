@@ -58,7 +58,7 @@ type PatientSummary = {
   };
   summary: {
     cobb_angle: number;
-    severity: 'mild' | 'moderate' | 'severe';
+    severity: 'mild' | 'moderate' | 'severe' | 'no_scoliosis_or_below_threshold';
     n_gaps: number;
     n_regions: number;
     n_clusters: number;
@@ -530,6 +530,9 @@ function severityLabel(value?: string) {
   }
   if (normalized === 'severe') {
     return 'Severa';
+  }
+  if (normalized === 'no_scoliosis_or_below_threshold') {
+    return 'Sin escoliosis';
   }
 
   return value;
