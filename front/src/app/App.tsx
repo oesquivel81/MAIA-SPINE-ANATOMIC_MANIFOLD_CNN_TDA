@@ -1634,7 +1634,7 @@ function RegionCandidateTable({
   return (
     <SectionCard title="Detalle de regiones candidatas" icon={<Layers3 className="h-4 w-4 text-sky-400" />}>
       <div className="overflow-x-auto rounded-2xl border border-[#1e324a]">
-        <div className="max-h-[clamp(280px,40vh,520px)] overflow-y-auto">
+        <div className="max-h-[clamp(400px,72vh,1100px)] overflow-y-auto">
           <table className="min-w-full divide-y divide-[#19304a] text-xs">
             <thead className="sticky top-0 z-10 bg-[#0f2033] text-left text-xs uppercase tracking-[0.16em] text-slate-500">
               <tr>
