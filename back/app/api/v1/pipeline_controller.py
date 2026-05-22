@@ -192,3 +192,11 @@ def _upload_artifacts_and_sign(clinical: dict, bucket: str, region: str, expires
     # ── CSV de gap_summary ─────────────────────────────────────────────
     gap_summary = clinical.get("gap_summary", {})
     gap_summary["vertebra_csv_path"] = _upload_and_sign(gap_summary.get("vertebra_csv_path"))
+
+    # ── CSV de la curva espinal (nervio) ───────────────────────────────
+    nerve_curve = clinical.get("nerve_curve", {})
+    nerve_curve["curve_csv_path"]     = _upload_and_sign(nerve_curve.get("curve_csv_path"))
+    nerve_curve["centroids_csv_path"] = _upload_and_sign(nerve_curve.get("centroids_csv_path"))
+    nerve_curve["peaks_csv_path"]     = _upload_and_sign(nerve_curve.get("peaks_csv_path"))
+    nerve_curve["match_csv_path"]     = _upload_and_sign(nerve_curve.get("match_csv_path"))
+    clinical["nerve_curve"] = nerve_curve
