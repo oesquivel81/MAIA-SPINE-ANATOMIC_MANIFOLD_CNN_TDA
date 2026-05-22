@@ -31,6 +31,16 @@ export default defineConfig({
     },
   },
 
+  server: {
+    proxy: {
+      '/api/v1': {
+        target: 'http://maia-alb-1900242561.us-east-1.elb.amazonaws.com',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+  },
+
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
   assetsInclude: ['**/*.svg', '**/*.csv'],
 
