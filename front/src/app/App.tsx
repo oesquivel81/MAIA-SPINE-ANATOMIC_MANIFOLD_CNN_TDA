@@ -110,6 +110,13 @@ type SpineCurveRow = {
   t_norm: number;
 };
 
+type PeakCurveRow = {
+  centroid_curve_x: number;
+  centroid_curve_y: number;
+  centroid_t_norm: number;
+  spatial_order: number;
+};
+
 type ClusterSummary = {
   name: string;
   clusterId: number;
@@ -634,6 +641,7 @@ export default function App() {
   const [heatZoom, setHeatZoom] = useState(1);
   const [liveRegionCandidates, setLiveRegionCandidates] = useState<RegionCandidate[] | null>(null);
   const [spineRealCurve, setSpineRealCurve] = useState<SpineCurveRow[] | null>(null);
+  const [spinePeaksCurve, setSpinePeaksCurve] = useState<PeakCurveRow[] | null>(null);
 
   const summary = useMemo(() => buildDashboardSummary(analysisData ?? undefined), [analysisData]);
   const dashboardImages = useMemo(() => buildDashboardImages(analysisData ?? undefined), [analysisData]);
@@ -699,6 +707,26 @@ export default function App() {
       .catch(() => { if (!cancelled) setSpineRealCurve(null); });
     return () => { cancelled = true; };
   }, [analysisData?.nerve_curve?.curve_csv_path]);
+
+  // Cargar centroid_peak_spatial_index.csv → PeakCurveRow[] para overlay imagen
+  useEffect(() => {
+    const url = analysisData?.nerve_curve?.peaks_csv_path;
+    if (!url) {
+      setSpinePeaksCurve(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(url)
+      .then((r) => r.text())
+      .then((text) => {
+        if (!cancelled) {
+          const rows = parsePeaksCSV(text);
+          if (rows.length > 0) setSpinePeaksCurve(rows);
+        }
+      })
+      .catch(() => { if (!cancelled) setSpinePeaksCurve(null); });
+    return () => { cancelled = true; };
+  }, [analysisData?.nerve_curve?.peaks_csv_path]);
 
   const filteredCandidates = useMemo(() => {
     return activeCandidates.filter((candidate) => {
@@ -806,6 +834,7 @@ export default function App() {
     setHeatMetric('gap_strength_mean');
     setLiveRegionCandidates(null);
     setSpineRealCurve(null);
+    setSpinePeaksCurve(null);
     handleSelectCandidate(regionCandidates[9]);
     resetHeatmap();
     toast.success('Dashboard reiniciado para un nuevo análisis');
@@ -838,7 +867,11 @@ export default function App() {
 
                 <div className="col-span-12 min-h-0 overflow-hidden xl:col-span-6">
                   <div className="grid gap-4">
-                    <StructuralAnalysisPanel imageSrc={dashboardImages.structuralImage} />
+                    <StructuralAnalysisPanel
+                      imageSrc={dashboardImages.structuralImage}
+                      normalizedImageSrc={dashboardImages.normalizedImage}
+                      peaksCurve={spinePeaksCurve ?? undefined}
+                    />
                     <DynamicCurveSection
                       candidates={orderedCandidates}
                       selectedCandidate={selectedCandidate}
@@ -1214,28 +1247,88 @@ function SummarySidebar({ summary, clusters }: { summary: PatientSummary['summar
   );
 }
 
-function StructuralAnalysisPanel({ imageSrc }: { imageSrc: string }) {
+function StructuralAnalysisPanel({
+  imageSrc,
+  normalizedImageSrc,
+  peaksCurve,
+}: {
+  imageSrc: string;
+  normalizedImageSrc?: string;
+  peaksCurve?: PeakCurveRow[];
+}) {
+  const overlayCurvePath = useMemo(() => {
+    if (!peaksCurve || peaksCurve.length === 0) return '';
+    const sorted = [...peaksCurve].sort((a, b) => a.spatial_order - b.spatial_order);
+    const xs = sorted.map((r) => r.centroid_curve_x);
+    const ys = sorted.map((r) => r.centroid_curve_y);
+    const xMin = Math.min(...xs); const xMax = Math.max(...xs);
+    const yMin = Math.min(...ys); const yMax = Math.max(...ys);
+    const xRange = Math.max(xMax - xMin, 1);
+    const yRange = Math.max(yMax - yMin, 1);
+    return sorted
+      .map((row, i) => {
+        const x = ((row.centroid_curve_x - xMin) / xRange) * 100;
+        const y = ((row.centroid_curve_y - yMin) / yRange) * 100;
+        return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+      })
+      .join(' ');
+  }, [peaksCurve]);
+
   return (
     <SectionCard
-      title="Análisis estructural — intervertebral · boundary · señal combinada"
+      title="Análisis estructural — imagen normalizada + curva"
       icon={<ScanLine className="h-4 w-4 text-sky-400" />}
       className="overflow-hidden"
     >
-      <div className="overflow-hidden rounded-2xl border border-[#1e324a] bg-[#08111d]">
-        <img src={imageSrc} alt="Análisis estructural" className="h-[clamp(170px,26vh,240px)] w-full object-cover" />
-      </div>
-      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
-        {[
-          ['Imagen', 'Radiografía normalizada'],
-          ['Intervertebral', 'cov=52.0%'],
-          ['Boundary', 'cov=46.1%'],
-          ['Señal combinada', '0.55·bnd + 0.85·inter + 0.15·ord · max=1.36'],
-        ].map(([title, value]) => (
-          <div key={title} className="rounded-2xl border border-[#1e324a] bg-[#102033] px-4 py-3">
-            <div className="text-xs uppercase tracking-[0.22em] text-slate-500">{title}</div>
-            <div className="mt-2 text-sm text-slate-200">{value}</div>
+      <div className="grid gap-3 md:grid-cols-2">
+        {/* Imagen original normalizada */}
+        <div className="overflow-hidden rounded-2xl border border-[#1e324a] bg-[#08111d]">
+          <div className="mb-1 px-2 pt-2 text-xs text-slate-500 uppercase tracking-widest">Original normalizada</div>
+          <img src={normalizedImageSrc || imageSrc} alt="Imagen normalizada" className="h-[clamp(170px,26vh,240px)] w-full object-contain bg-[#07111f]" />
+        </div>
+        {/* Imagen + overlay de curva */}
+        <div className="overflow-hidden rounded-2xl border border-[#1e324a] bg-[#08111d]">
+          <div className="mb-1 px-2 pt-2 text-xs text-slate-500 uppercase tracking-widest">Overlay curva anatómica</div>
+          <div className="relative h-[clamp(170px,26vh,240px)] bg-[#07111f]">
+            <img
+              src={normalizedImageSrc || imageSrc}
+              alt="Overlay"
+              className="absolute inset-0 h-full w-full object-contain"
+            />
+            {overlayCurvePath && (
+              <svg
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                className="absolute inset-0 h-full w-full"
+              >
+                <path
+                  d={overlayCurvePath}
+                  fill="none"
+                  stroke="#2196f3"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  opacity="0.9"
+                />
+                {peaksCurve &&
+                  [...peaksCurve].sort((a, b) => a.spatial_order - b.spatial_order).map((row, i) => {
+                    const xs = peaksCurve.map((r) => r.centroid_curve_x);
+                    const ys = peaksCurve.map((r) => r.centroid_curve_y);
+                    const xMin = Math.min(...xs); const xMax = Math.max(...xs);
+                    const yMin = Math.min(...ys); const yMax = Math.max(...ys);
+                    const x = ((row.centroid_curve_x - xMin) / Math.max(xMax - xMin, 1)) * 100;
+                    const y = ((row.centroid_curve_y - yMin) / Math.max(yMax - yMin, 1)) * 100;
+                    return <circle key={i} cx={x} cy={y} r="1.2" fill="#22c55e" opacity="0.9" />;
+                  })}
+              </svg>
+            )}
+            {!overlayCurvePath && (
+              <div className="absolute inset-0 flex items-center justify-center text-xs text-slate-500">
+                Curva disponible tras análisis
+              </div>
+            )}
           </div>
-        ))}
+        </div>
       </div>
     </SectionCard>
   );
@@ -1629,12 +1722,6 @@ function ImageTabLayout({
   imageSrc?: string;
   metadata: [string, string][];
 }) {
-  const [imageStatus, setImageStatus] = useState<'idle' | 'loaded' | 'error'>(imageSrc ? 'idle' : 'error');
-
-  useEffect(() => {
-    setImageStatus(imageSrc ? 'idle' : 'error');
-  }, [imageSrc]);
-
   return (
     <div className="grid gap-5 xl:grid-cols-[1.45fr_0.75fr]">
       <SectionCard title={title} icon={<ScanLine className="h-4 w-4 text-sky-400" />}>
@@ -1644,52 +1731,11 @@ function ImageTabLayout({
               src={imageSrc}
               alt={title}
               className="h-[clamp(220px,44vh,460px)] w-full rounded-2xl object-contain bg-[#07111f]"
-              onLoad={() => {
-                setImageStatus('loaded');
-                console.info(`[image-debug] ${title} loaded`, { src: imageSrc });
-              }}
-              onError={(event) => {
-                setImageStatus('error');
-                console.error(`[image-debug] ${title} failed`, {
-                  src: imageSrc,
-                  currentSrc: event.currentTarget.currentSrc,
-                });
-              }}
             />
           ) : (
             <div className="flex h-[clamp(220px,44vh,460px)] w-full items-center justify-center rounded-2xl border border-dashed border-[#1e324a] bg-[#07111f] text-sm text-slate-400">
               La respuesta llegó, pero no trae una URL utilizable para esta imagen.
             </div>
-          )}
-        </div>
-        <div className="mt-4 rounded-2xl border border-[#1e324a] bg-[#102033] px-4 py-4 text-sm text-slate-300">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-slate-400">Estado de render</span>
-            <span
-              className={`rounded-full px-2 py-1 text-xs font-medium ${
-                imageStatus === 'loaded'
-                  ? 'bg-emerald-500/15 text-emerald-300'
-                  : imageStatus === 'error'
-                    ? 'bg-red-500/15 text-red-300'
-                    : 'bg-sky-500/15 text-sky-300'
-              }`}
-            >
-              {imageStatus === 'loaded' ? 'Cargada' : imageStatus === 'error' ? 'Error' : 'Intentando cargar'}
-            </span>
-          </div>
-          <div className="mt-3 text-xs uppercase tracking-[0.18em] text-slate-500">src detectado</div>
-          <div className="mt-2 break-all rounded-xl border border-[#1e324a] bg-[#091320] px-3 py-3 font-mono text-xs text-slate-200">
-            {imageSrc || 'Sin src'}
-          </div>
-          {imageSrc && (
-            <a
-              href={imageSrc}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-3 inline-flex rounded-xl border border-sky-500/25 bg-sky-500/10 px-3 py-2 text-xs font-medium text-sky-300 transition-colors hover:bg-sky-500/15"
-            >
-              Abrir imagen en una pestaña nueva
-            </a>
           )}
         </div>
       </SectionCard>
@@ -2182,6 +2228,17 @@ function parseCurveCSV(text: string): SpineCurveRow[] {
       x_curve: parseFloat(row.x_curve || '') || 0,
       y_curve: parseFloat(row.y_curve || '') || 0,
       t_norm: parseFloat(row.t_norm || '') || 0,
+    }));
+}
+
+function parsePeaksCSV(text: string): PeakCurveRow[] {
+  return parseCSV(text)
+    .filter((row) => row.centroid_curve_x !== undefined && row.centroid_curve_x !== '')
+    .map((row) => ({
+      centroid_curve_x: parseFloat(row.centroid_curve_x || '') || 0,
+      centroid_curve_y: parseFloat(row.centroid_curve_y || '') || 0,
+      centroid_t_norm: parseFloat(row.centroid_t_norm || '') || 0,
+      spatial_order: parseFloat(row.spatial_order || '') || 0,
     }));
 }
 
