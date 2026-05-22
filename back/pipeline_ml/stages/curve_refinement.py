@@ -223,15 +223,19 @@ class CurveRefinementStage(PipelineStage):
         payload["curve_meta_path"] = str(meta_path)
         payload["curve_refinement_done"] = True
 
-        # --- 6b. Debug: overlay de curva sobre imagen + dp_curve dict ---
+        # --- 6b. Debug: imagen normalizada + overlay de curva ---
+        norm_path = out_dir / "00_normalized_image.png"
+        cv2.imwrite(str(norm_path), (img01 * 255).clip(0, 255).astype(np.uint8))
+
         overlay_path = out_dir / "refined_curve_overlay_runtime.png"
-        self._save_curve_overlay(image, dp_ys, dp_xs, overlay_path)
+        self._save_curve_overlay(img01, dp_ys, dp_xs, overlay_path)
         logger.info(f"CurveRefinementStage: overlay guardado → {overlay_path}")
 
         payload["dp_curve"] = {"dp_ys": dp_ys.tolist(), "dp_xs": dp_xs.tolist()}
 
         debug_images: dict = payload.get("debug_images", {})
-        debug_images["refined_curve_overlay"] = str(overlay_path)
+        debug_images["normalized_image"]       = str(norm_path)
+        debug_images["refined_curve_overlay"]  = str(overlay_path)
         payload["debug_images"] = debug_images
 
         return payload
@@ -263,10 +267,14 @@ class CurveRefinementStage(PipelineStage):
         color: tuple = (0, 255, 0),
         thickness: int = 2,
     ) -> None:
-        """Guarda la imagen con la curva DP superpuesta en color."""
+        """Guarda la imagen (float [0,1] o uint8) con la curva DP superpuesta en color."""
         img8 = image.copy()
+        # Normalizar a uint8 correctamente segun rango
         if img8.dtype != np.uint8:
-            img8 = np.clip(img8, 0, 255).astype(np.uint8)
+            if img8.max() <= 1.0:
+                img8 = (img8 * 255).clip(0, 255).astype(np.uint8)
+            else:
+                img8 = np.clip(img8, 0, 255).astype(np.uint8)
         if img8.ndim == 2:
             overlay = cv2.cvtColor(img8, cv2.COLOR_GRAY2BGR)
         else:
