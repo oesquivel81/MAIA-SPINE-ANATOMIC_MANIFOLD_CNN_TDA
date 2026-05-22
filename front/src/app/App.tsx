@@ -2328,13 +2328,26 @@ function buildRealCurvePath(realCurve: SpineCurveRow[]): string {
   const xMax = Math.max(...xValues);
   const xRange = Math.max(xMax - xMin, 1);
   const step = Math.max(1, Math.floor(realCurve.length / 96));
-  return realCurve
+  const pts = realCurve
     .filter((_, i) => i % step === 0)
-    .map((row, i) => {
-      const xNorm = (row.x_curve - xMin) / xRange;
-      return `${i === 0 ? 'M' : 'L'} ${80 + xNorm * 160} ${34 + row.t_norm * 520}`;
-    })
-    .join(' ');
+    .map((row) => ({
+      x: 80 + ((row.x_curve - xMin) / xRange) * 160,
+      y: 34 + row.t_norm * 520,
+    }));
+  if (pts.length < 2) return `M ${pts[0].x} ${pts[0].y}`;
+  const d: string[] = [`M ${pts[0].x} ${pts[0].y}`];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[Math.min(pts.length - 1, i + 2)];
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    d.push(`C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${p2.x} ${p2.y}`);
+  }
+  return d.join(' ');
 }
 
 function buildPanelImage(title: string, subtitle: string, accent: string, includeSignal = false) {
