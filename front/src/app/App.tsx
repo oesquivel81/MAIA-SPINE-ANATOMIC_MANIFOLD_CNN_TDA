@@ -37,7 +37,6 @@ import { apiService } from './services/api';
 
 type DashboardTab =
   | 'Resumen'
-  | 'Imagen original'
   | 'Imagen procesada'
   | 'Análisis estructural'
   | 'Detalle del punto'
@@ -159,7 +158,6 @@ const colors = {
 
 const tabs: DashboardTab[] = [
   'Resumen',
-  'Imagen original',
   'Imagen procesada',
   'Análisis estructural',
   'Detalle del punto',
@@ -904,21 +902,6 @@ export default function App() {
               </div>
             )}
 
-            {activeTab === 'Imagen original' && (
-              <ImageTabLayout
-                title="Imagen original"
-                imageSrc={dashboardImages.normalizedImage}
-                metadata={[
-                  ['Paciente', patientForm.name],
-                  ['Edad', `${patientForm.age}`],
-                  ['Peso', `${patientForm.weight} kg`],
-                  ['Sexo', patientForm.sex],
-                  ['Tipo de imagen', analysisData?.images.normalized_image ? 'Radiografía S3 normalizada' : 'Radiografía normalizada'],
-                  ['Estado', analysisData ? 'Payload backend cargado' : 'Modo demostración'],
-                ]}
-              />
-            )}
-
             {activeTab === 'Imagen procesada' && (
               <ProcessedImageTab
                 imageSrc={dashboardImages.processedImage}
@@ -1284,7 +1267,7 @@ function StructuralAnalysisPanel({
         {/* Imagen original normalizada */}
         <div className="overflow-hidden rounded-2xl border border-[#1e324a] bg-[#08111d]">
           <div className="mb-1 px-2 pt-2 text-xs text-slate-500 uppercase tracking-widest">Original normalizada</div>
-          <img src={normalizedImageSrc || imageSrc} alt="Imagen normalizada" className="h-[clamp(170px,26vh,240px)] w-full object-contain bg-[#07111f]" />
+          <img src={normalizedImageSrc || imageSrc} alt="Imagen normalizada" className="h-[clamp(260px,40vh,520px)] w-full object-contain bg-[#07111f]" />
         </div>
         {/* Imagen + overlay de curva */}
         <div className="overflow-hidden rounded-2xl border border-[#1e324a] bg-[#08111d]">
@@ -1650,25 +1633,29 @@ function RegionCandidateTable({
 }) {
   return (
     <SectionCard title="Detalle de regiones candidatas" icon={<Layers3 className="h-4 w-4 text-sky-400" />}>
-      <div className="overflow-hidden rounded-2xl border border-[#1e324a]">
-        <div className="max-h-[clamp(180px,24vh,260px)] overflow-hidden">
+      <div className="overflow-x-auto rounded-2xl border border-[#1e324a]">
+        <div className="max-h-[clamp(280px,40vh,520px)] overflow-y-auto">
           <table className="min-w-full divide-y divide-[#19304a] text-xs">
-            <thead className="sticky top-0 bg-[#0f2033] text-left text-xs uppercase tracking-[0.16em] text-slate-500">
+            <thead className="sticky top-0 z-10 bg-[#0f2033] text-left text-xs uppercase tracking-[0.16em] text-slate-500">
               <tr>
                 {[
                   'peak_idx',
                   'curve_idx',
                   't_norm',
                   'vertebra_id',
-                  'región anatómica probable',
+                  'región anatómica',
                   'cluster_id',
                   'cluster_prob',
+                  'cluster_entropy',
                   'gap_strength_mean',
                   'peak_height',
-                  'wavelength_prev',
-                  'wavelength_next',
+                  'peak_highpass',
+                  'left_gap',
+                  'right_gap',
+                  'wl_prev',
+                  'wl_next',
                 ].map((header) => (
-                  <th key={header} className="px-3 py-2 font-medium">
+                  <th key={header} className="whitespace-nowrap px-3 py-2 font-medium">
                     {header}
                   </th>
                 ))}
@@ -1684,12 +1671,12 @@ function RegionCandidateTable({
                     className={`cursor-pointer transition-colors ${selected ? 'bg-sky-500/15' : 'hover:bg-[#102033]'}`}
                     style={{ boxShadow: selected ? 'inset 3px 0 0 #2196f3' : undefined }}
                   >
-                    <td className="px-3 py-2">{candidate.peak_idx}</td>
-                    <td className="px-3 py-2">{candidate.curve_idx}</td>
-                    <td className="px-3 py-2">{candidate.t_norm.toFixed(3)}</td>
-                    <td className="px-3 py-2">{candidate.vertebra_id}</td>
-                    <td className="px-3 py-2">{readableRegion(candidate.anatomic_region_probable)}</td>
-                    <td className="px-3 py-2">
+                    <td className="whitespace-nowrap px-3 py-2">{candidate.peak_idx}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{candidate.curve_idx}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{candidate.t_norm.toFixed(3)}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{candidate.vertebra_id}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{readableRegion(candidate.anatomic_region_probable)}</td>
+                    <td className="whitespace-nowrap px-3 py-2">
                       <span
                         className="rounded-full px-2 py-1 text-xs"
                         style={{ backgroundColor: `${clusterColor(candidate.cluster_id)}20`, color: clusterColor(candidate.cluster_id) }}
@@ -1697,11 +1684,15 @@ function RegionCandidateTable({
                         {candidate.cluster_id}
                       </span>
                     </td>
-                    <td className="px-3 py-2">{candidate.cluster_probability.toFixed(4)}</td>
-                    <td className="px-3 py-2">{candidate.gap_strength_mean.toFixed(3)}</td>
-                    <td className="px-3 py-2">{candidate.peak_height.toFixed(3)}</td>
-                    <td className="px-3 py-2">{candidate.wavelength_prev}</td>
-                    <td className="px-3 py-2">{candidate.wavelength_next}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{candidate.cluster_probability.toFixed(4)}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{candidate.cluster_entropy.toFixed(4)}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{candidate.gap_strength_mean.toFixed(3)}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{candidate.peak_height.toFixed(3)}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{candidate.peak_highpass_value.toFixed(3)}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{candidate.left_gap_strength.toFixed(3)}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{candidate.right_gap_strength.toFixed(3)}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{candidate.wavelength_prev}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{candidate.wavelength_next}</td>
                   </tr>
                 );
               })}
