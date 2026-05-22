@@ -56,6 +56,9 @@ metadata:
     alb.ingress.kubernetes.io/group.name: maia-alb-group
     alb.ingress.kubernetes.io/group.order: '20'
 
+    # target-type ip requerido (igual que backend) para pods directos sin NodePort
+    alb.ingress.kubernetes.io/target-type: ip
+
     # Health check específico del frontend
     alb.ingress.kubernetes.io/healthcheck-path: /
     alb.ingress.kubernetes.io/healthcheck-interval-seconds: '30'
