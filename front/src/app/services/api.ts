@@ -1,6 +1,6 @@
 import type { AnalysisData, PatientInfo } from '../../../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 const ANALYSIS_ENDPOINT =
   import.meta.env.VITE_PIPELINE_RUN_URL || `${API_BASE_URL}/pipeline/run`;
 const API_ORIGIN = (() => {
