@@ -130,6 +130,8 @@ type PatchInfo = {
   clusterId: number;
   intensity: number;
   src: string;
+  curveIdx: number;
+  peakIdx: number;
 };
 
 type DashboardImageSet = {
@@ -774,10 +776,16 @@ export default function App() {
         region: candidate ? readableRegion(candidate.anatomic_region_probable) : `Orden anatómico ${index + 1}`,
         clusterId: candidate?.cluster_id ?? analysisData?.predictions.dominant_cluster_id ?? 0,
         intensity: candidate?.gap_strength_mean ?? 0,
+        curveIdx: candidate?.curve_idx ?? index,
+        peakIdx: candidate?.peak_idx ?? -1,
         src,
       };
     });
   }, [analysisData?.predictions.dominant_cluster_id, dashboardImages.patchInputs, activeCandidates]);
+
+  const positionOrderedPatches = useMemo(() => {
+    return [...patchCards].sort((a, b) => a.curveIdx - b.curveIdx);
+  }, [patchCards]);
 
   const handleSelectCandidate = (candidate: RegionCandidate) => {
     setSelectedPeakIdx(candidate.peak_idx);
@@ -883,21 +891,14 @@ export default function App() {
                 </div>
 
                 <div className="col-span-12 min-h-0 overflow-hidden xl:col-span-3">
-                  <div className="grid gap-4">
-                    <SpineHeatmap3D
-                      candidates={orderedCandidates}
-                      selectedPeakIdx={selectedCandidate.peak_idx}
-                      metricMode={heatMetric}
-                      rotation={heatRotation}
-                      zoom={heatZoom}
-                      onRotateChange={setHeatRotation}
-                      onZoomChange={setHeatZoom}
-                      onReset={resetHeatmap}
-                      onMetricChange={setHeatMetric}
-                      onSelectCandidate={handleSelectCandidate}
-                      realCurve={spineRealCurve ?? undefined}
-                    />
-                  </div>
+                  <PatchColumn
+                    patches={positionOrderedPatches}
+                    selectedPeakIdx={selectedCandidate.peak_idx}
+                    onSelectPatch={(pk) => {
+                      const c = orderedCandidates.find((x) => x.peak_idx === pk);
+                      if (c) handleSelectCandidate(c);
+                    }}
+                  />
                 </div>
               </div>
             )}
@@ -2020,6 +2021,47 @@ function HeatmapTab({
         </div>
       </SectionCard>
     </div>
+  );
+}
+
+function PatchColumn({
+  patches,
+  selectedPeakIdx,
+  onSelectPatch,
+}: {
+  patches: PatchInfo[];
+  selectedPeakIdx: number;
+  onSelectPatch: (peakIdx: number) => void;
+}) {
+  return (
+    <SectionCard title={`Parches · posición (${patches.length})`} icon={<Layers3 className="h-4 w-4 text-sky-400" />}>
+      <div className="max-h-[clamp(320px,62vh,860px)] space-y-2 overflow-y-auto pr-1">
+        {patches.map((patch) => {
+          const active = patch.peakIdx === selectedPeakIdx;
+          return (
+            <button
+              key={patch.id}
+              type="button"
+              onClick={() => onSelectPatch(patch.peakIdx)}
+              className={`w-full overflow-hidden rounded-xl border text-left transition-all ${
+                active
+                  ? 'border-sky-500 bg-sky-500/10 ring-1 ring-sky-500/40'
+                  : 'border-[#1e324a] bg-[#091320] hover:border-sky-800'
+              }`}
+            >
+              <div className="flex items-center gap-3 p-2">
+                <img src={patch.src} alt={`Parche ${patch.id}`} className="h-14 w-14 flex-shrink-0 rounded-lg object-cover" />
+                <div className="min-w-0 flex-1 text-xs">
+                  <div className="truncate font-medium text-slate-100">{patch.region}</div>
+                  <div className="mt-0.5 text-slate-400">Cluster {patch.clusterId}</div>
+                  <div className="mt-0.5 text-slate-500">gap {patch.intensity.toFixed(2)}</div>
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </SectionCard>
   );
 }
 
