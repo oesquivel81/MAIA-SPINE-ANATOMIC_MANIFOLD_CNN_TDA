@@ -9,4 +9,6 @@ locals {
     Environment = var.environment
     ManagedBy   = "terraform"
   }
+
+    pipeline_bucket_name = try(aws_s3_bucket.artifacts[0].id, var.hf_target_s3_bucket)
 }

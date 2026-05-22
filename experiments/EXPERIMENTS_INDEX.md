@@ -1,5 +1,32 @@
 # MAIA Spine Experiments Index
 
+---
+
+## Session log — 2026-05-21 | Rama: `chore/eks-deploy-requirements-update`
+
+### Git: Merges de feature branches completados
+
+| Rama | Estado | Detalle |
+|---|---|---|
+| `feature/cnn-binary-stage` | ✅ Ya integrada | Estaba en el historial de `chore` (PR #12) |
+| `feature/curve-refinement-stage` | ✅ Ya integrada | (PR #13) |
+| `feature/curve-patch-stage` | ✅ Ya integrada | (PR #14) |
+| `feature/student-patch-stage` | ✅ Ya integrada | (PR #15) |
+| `feature/patch-reconstruction-stage` | ✅ Mergeada en esta sesión | Conflicto "add/add" en `patch_reconstruction.py` — resuelto conservando `combined_signal_path` y `analysis_grid_path` en payload (versión HEAD más nueva) |
+
+- **Merge commit**: `12dd7765d` — "Merge branch 'feature/patch-reconstruction-stage' into chore/eks-deploy-requirements-update"
+- **Pushed**: `a52ce409f..12dd7765d` → origin/chore/eks-deploy-requirements-update ✅
+
+### Auditoría de stubs/modelos hardcodeados
+
+- `back/pipeline_ml/models/cnn_curve.py` → `CnnCurveModel`: **stub/dead code** — no es usado por ningún stage
+- `back/pipeline_ml/models/student_manifold_cnn.py` → `StudentManifoldCnnModel`: **stub/dead code**
+- `back/pipeline_ml/models/clustering.py` → `ClusteringModel`: **stub/dead code**
+- `back/pipeline_ml/stages/postprocessing.py`: trivial stub (solo `payload["postprocessed"] = True`)
+- Inferencia real: `InferenceStage` usa GMM desde `joblib_paths[2]`; `BinaryCurveStage` usa `FastBinaryCurveUNet` (.pt checkpoint)
+
+---
+
 ## v.02.A — first_cnn_generator_channel_to_2cnn_combined_v7_fullres
 
 - Experiment ID: `v02A_first_cnn_generator_channel_to_2cnn_combined_v7_fullres_20260517_035024`

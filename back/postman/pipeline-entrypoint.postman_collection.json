@@ -1,0 +1,63 @@
+{
+  "info": {
+    "name": "MAIA - Pipeline Entrypoint",
+    "_postman_id": "33b18d2b-9db0-4a3f-a3aa-bffc8f9ec0b5",
+    "description": "Prueba del endpoint que recibe imagen por multipart/form-data y ejecuta pipeline_ml entrypoint.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Run Pipeline Entrypoint (Image Upload)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": ""
+            },
+            {
+              "key": "full_assets",
+              "value": "PACIENTE_APELLIDO_NOMBRE|C:/models/binary_curve.pt;C:/models/student_1ch_4heads.pt;C:/models/clustering.joblib|C:/resources/r1.csv;C:/resources/r2.json",
+              "type": "text"
+            },
+            {
+              "key": "config_file",
+              "value": "",
+              "type": "text"
+            },
+            {
+              "key": "request_id",
+              "value": "",
+              "type": "text"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/normalization/pipeline/entrypoint",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "normalization",
+            "pipeline",
+            "entrypoint"
+          ]
+        },
+        "description": "Sube una imagen y ejecuta run_pipeline_entry(image, full_assets, config_file, request_id)."
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000"
+    }
+  ]
+}

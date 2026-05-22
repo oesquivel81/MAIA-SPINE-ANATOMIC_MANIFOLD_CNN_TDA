@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: listener
+  namespace: maia
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: listener
+  template:
+    metadata:
+      labels:
+        app: listener
+    spec:
+      containers:
+        - name: listener
+          image: maia-back:dev
+          imagePullPolicy: IfNotPresent
+          command: ["python", "scripts/kafka_mongo_listener.py"]
+          env:
+            - name: LISTENER_ENABLED
+              value: "true"
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: kafka:9092
+            - name: KAFKA_TOPIC_PATTERN
+              value: "^pipeline-stage\\..+"
+            - name: KAFKA_GROUP_ID
+              value: pipeline-stage-listener
+            - name: KAFKA_AUTO_OFFSET_RESET
+              value: latest
+            - name: MONGO_URI
+              value: mongodb://mongo:27017
+            - name: MONGO_DB
+              value: app_db
+            - name: MONGO_LISTENER_COLLECTION
+              value: pipeline_stage_metrics

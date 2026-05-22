@@ -22,8 +22,11 @@
     "temp_subdir": "tmp",
     "s3_bucket": "",
     "s3_prefix": "pipeline-ml",
+    "mongo_uri": "",
     "mongo_database": "maia",
     "mongo_collection": "pipeline_metrics",
+    "kafka_bootstrap_servers": "",
+    "kafka_topic_prefix": "pipeline-stage",
     "kafka_topic": "pipeline-progress",
     "lambda_function_name": ""
   }
