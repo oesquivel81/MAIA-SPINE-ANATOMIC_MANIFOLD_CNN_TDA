@@ -323,7 +323,7 @@ def _build_clinical_result(request_id: str, full_name: str, payload: dict[str, A
         "std_gap_spacing":  gap_analysis.get("std_gap_spacing"),
         "n_peaks":          gap_analysis.get("n_peaks"),
         "n_gap_peaks":      gap_analysis.get("n_gap_peaks"),
-        "vertebra_csv_path": gap_analysis.get("vertebra_csv_path"),
+        "vertebra_csv_path": gap_analysis.get("vertebra_csv") or gap_analysis.get("vertebra_csv_path"),
     }
 
     return {
