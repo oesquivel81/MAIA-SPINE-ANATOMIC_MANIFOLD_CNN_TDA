@@ -7,3 +7,4 @@ resources:
   - listener.yaml
   - backend.yaml
   - frontend.yaml
+  - ingress.yaml
