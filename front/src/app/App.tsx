@@ -39,8 +39,7 @@ type DashboardTab =
   | 'Resumen'
   | 'Imagen procesada'
   | 'Análisis estructural'
-  | 'Detalle del punto'
-  | 'Parches';
+  | 'Detalle del punto';
 
 type RegionName =
   | 'upper_thoracic_probable'
@@ -163,7 +162,6 @@ const tabs: DashboardTab[] = [
   'Imagen procesada',
   'Análisis estructural',
   'Detalle del punto',
-  'Parches',
 ];
 
 const patientSummary: PatientSummary = {
@@ -862,7 +860,7 @@ export default function App() {
             onNewAnalysis={handleNewAnalysis}
           />
 
-          <DashboardTabs activeTab={activeTab} patchCount={patchCards.length} onChange={setActiveTab} />
+          <DashboardTabs activeTab={activeTab} onChange={setActiveTab} />
 
           <main className="mt-4 min-h-0 flex-1 overflow-x-hidden pb-2">
             {activeTab === 'Resumen' && (
@@ -929,20 +927,6 @@ export default function App() {
               </div>
             )}
 
-            {activeTab === 'Parches' && (
-              <PatchGrid
-                patches={patchCards}
-                onSelectPeak={(patchIndex) => {
-                  const candidate = regionCandidates[patchIndex];
-                  if (candidate) {
-                    handleSelectCandidate(candidate);
-                    return;
-                  }
-
-                  setSelectedPeakIdx(regionCandidates[0]?.peak_idx ?? 0);
-                }}
-              />
-            )}
           </main>
         </div>
       </div>
@@ -1109,19 +1093,17 @@ function HeaderSelect({
 
 function DashboardTabs({
   activeTab,
-  patchCount,
   onChange,
 }: {
   activeTab: DashboardTab;
-  patchCount: number;
   onChange: (tab: DashboardTab) => void;
 }) {
   return (
     <div className="mt-4 rounded-2xl border border-[#1e324a] bg-[#0b1727] p-2">
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-4">
         {tabs.map((tab) => {
           const isActive = tab === activeTab;
-          const label = tab === 'Parches' ? `Parches (${patchCount})` : tab;
+          const label = tab;
           return (
             <button
               key={tab}
