@@ -157,7 +157,14 @@ def _upload_artifacts_and_sign(clinical: dict, bucket: str, region: str, expires
         except ValueError:
             s3_key = str(p).replace("\\", "/").lstrip("/")
         try:
-            content_type = "image/png" if s3_key.endswith(".png") else "application/octet-stream"
+            if s3_key.endswith(".png") or s3_key.endswith(".jpg") or s3_key.endswith(".jpeg"):
+                content_type = "image/png"
+            elif s3_key.endswith(".csv"):
+                content_type = "text/csv"
+            elif s3_key.endswith(".json"):
+                content_type = "application/json"
+            else:
+                content_type = "application/octet-stream"
             s3.upload_file(str(abs_p), bucket, s3_key, ExtraArgs={"ContentType": content_type})
             return s3.generate_presigned_url(
                 "get_object",
@@ -167,9 +174,21 @@ def _upload_artifacts_and_sign(clinical: dict, bucket: str, region: str, expires
         except Exception:
             return local_path  # Si falla, retornar ruta original sin romper la respuesta
 
+    # ── Imágenes (excluye binary_mask, curve_mask, combined_signal, spatial_index_panel) ──
     images = clinical.get("images", {})
-    for field in ("combined_signal", "analysis_grid", "gap_peak_analysis",
-                  "spatial_index_panel", "binary_mask", "curve_mask", "normalized_image"):
+    for field in ("analysis_grid", "gap_peak_analysis", "normalized_image"):
         images[field] = _upload_and_sign(images.get(field))
+    # Eliminar campos excluidos de la respuesta
+    for field in ("binary_mask", "curve_mask", "combined_signal", "spatial_index_panel"):
+        images.pop(field, None)
 
     images["patch_inputs"] = [_upload_and_sign(p) for p in images.get("patch_inputs", [])]
+
+    # ── CSV y JSON de predictions ──────────────────────────────────────
+    predictions = clinical.get("predictions", {})
+    for field in ("summary_csv_path", "regions_csv_path", "clinical_json_path", "clinical_figure_path"):
+        predictions[field] = _upload_and_sign(predictions.get(field))
+
+    # ── CSV de gap_summary ─────────────────────────────────────────────
+    gap_summary = clinical.get("gap_summary", {})
+    gap_summary["vertebra_csv_path"] = _upload_and_sign(gap_summary.get("vertebra_csv_path"))
