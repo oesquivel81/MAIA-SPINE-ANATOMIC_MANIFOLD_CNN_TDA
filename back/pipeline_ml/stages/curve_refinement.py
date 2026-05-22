@@ -168,13 +168,14 @@ class CurveRefinementStage(PipelineStage):
         prior_heatmap = self._draw_curve_heatmap(
             img01.shape, prior_ys, prior_xs, thickness=5, blur_sigma=4
         )
-        self._save_png(image_likelihood,  out_dir / "01_image_likelihood.png")
-        self._save_png(binary_band,       out_dir / "02_binary_band.png")
-        self._save_png(curve_bonus,       out_dir / "03_curve_bonus.png")
-        self._save_png(likelihood_final,  out_dir / "04_likelihood_final.png")
-        self._save_png(prior_heatmap,     out_dir / "05_prior_curve.png")
-        self._save_png(dp_heatmap,        out_dir / "06_curve_dp_heatmap.png")
-        self._save_png(dp_mask.astype(np.float32), out_dir / "07_curve_dp_mask.png")
+        self._save_png(image_likelihood,                  out_dir / "01_image_likelihood.png")
+        self._save_png(binary_band,                       out_dir / "02_binary_band.png")
+        self._save_png(curve_bonus,                       out_dir / "03_curve_bonus.png")
+        self._save_png(likelihood_final,                  out_dir / "04_likelihood_final.png")
+        self._save_png(prior_heatmap,                     out_dir / "05_prior_curve.png")
+        self._save_png(dp_heatmap,                        out_dir / "06_curve_dp_heatmap.png")
+        self._save_png(dp_mask.astype(np.float32),        out_dir / "07_curve_dp_mask.png")
+        self._save_png(binary_refined.astype(np.float32), out_dir / "08_binary_refined.png")
 
         np.save(out_dir / "curve_dp_heatmap.npy", dp_heatmap)
         np.save(out_dir / "curve_dp_mask.npy", dp_mask)
@@ -229,13 +230,19 @@ class CurveRefinementStage(PipelineStage):
 
         overlay_path = out_dir / "refined_curve_overlay_runtime.png"
         self._save_curve_overlay(img01, dp_ys, dp_xs, overlay_path)
-        logger.info(f"CurveRefinementStage: overlay guardado → {overlay_path}")
+
+        # Overlay combinado: normalized_image + binary_refined (azul) + DP curve (verde)
+        combined_path = out_dir / "combined_masks_overlay_runtime.png"
+        self._save_combined_overlay(img01, binary_refined, dp_ys, dp_xs, combined_path)
+        logger.info(f"CurveRefinementStage: overlays guardados → {out_dir}")
 
         payload["dp_curve"] = {"dp_ys": dp_ys.tolist(), "dp_xs": dp_xs.tolist()}
 
         debug_images: dict = payload.get("debug_images", {})
         debug_images["normalized_image"]       = str(norm_path)
+        debug_images["binary_refined"]         = str(out_dir / "08_binary_refined.png")
         debug_images["refined_curve_overlay"]  = str(overlay_path)
+        debug_images["combined_masks_overlay"] = str(combined_path)
         payload["debug_images"] = debug_images
 
         return payload
@@ -282,6 +289,31 @@ class CurveRefinementStage(PipelineStage):
         pts = np.stack([dp_xs.astype(np.int32), dp_ys.astype(np.int32)], axis=1)
         cv2.polylines(overlay, [pts], isClosed=False, color=color, thickness=thickness)
         cv2.imwrite(str(path), overlay)
+
+    @staticmethod
+    def _save_combined_overlay(
+        image: np.ndarray,
+        binary_refined: np.ndarray,
+        dp_ys: np.ndarray,
+        dp_xs: np.ndarray,
+        path: Path,
+    ) -> None:
+        """Overlay: imagen normalizada + máscara binaria refinada (azul semitransparente) + curva DP (verde)."""
+        img8 = image.copy()
+        if img8.dtype != np.uint8:
+            if img8.max() <= 1.0:
+                img8 = (img8 * 255).clip(0, 255).astype(np.uint8)
+            else:
+                img8 = np.clip(img8, 0, 255).astype(np.uint8)
+        canvas = cv2.cvtColor(img8, cv2.COLOR_GRAY2BGR)
+        # Máscara binaria refinada en azul semitransparente
+        blue_layer = canvas.copy()
+        blue_layer[binary_refined > 0] = [180, 60, 0]  # BGR → azul
+        canvas = cv2.addWeighted(canvas, 0.65, blue_layer, 0.35, 0)
+        # Curva DP en verde encima
+        pts = np.stack([dp_xs.astype(np.int32), dp_ys.astype(np.int32)], axis=1)
+        cv2.polylines(canvas, [pts], isClosed=False, color=(0, 255, 0), thickness=2)
+        cv2.imwrite(str(path), canvas)
 
     @staticmethod
     def _make_image_likelihood(
