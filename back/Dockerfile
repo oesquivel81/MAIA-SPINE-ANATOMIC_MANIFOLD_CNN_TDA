@@ -9,7 +9,10 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
+COPY pipeline_ml ./pipeline_ml
 COPY resources ./resources
+ARG CACHEBUST=1
+COPY scripts ./scripts
 
 EXPOSE 8000
 

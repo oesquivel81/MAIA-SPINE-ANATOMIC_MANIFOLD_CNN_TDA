@@ -10,7 +10,14 @@ import time
 from pipeline_ml.config import PipelineConfig
 from pipeline_ml.context import AssetBundle, PipelineContext, PipelineResult
 from pipeline_ml.logger import PipelineLogger, timed_step
-from pipeline_ml.outputs import EventBridge, LocalOutputWriter, MongoMetricsWriter, S3OutputWriter
+from pipeline_ml.outputs import (
+    AsyncKafkaStagePublisher,
+    AsyncMongoStageWriter,
+    EventBridge,
+    LocalOutputWriter,
+    MongoMetricsWriter,
+    S3OutputWriter,
+)
 from pipeline_ml.stages import (
     BinaryCurveStage,
     CurveRefinementStage,
@@ -68,6 +75,22 @@ class PipelineML:
             lambda_name=self.config.paths.lambda_function_name,
         )
 
+        # Camino B únicamente — no afecta Colab (instance_mode=False por defecto)
+        self.async_mongo_stage_writer = AsyncMongoStageWriter(
+            enabled=self.config.routing.write_metrics_to_mongo,
+            instance_mode=self.config.routing.instance_mode,
+            mongo_uri=self.config.paths.mongo_uri,
+            database=self.config.paths.mongo_database,
+            collection="pipeline_stage_metrics",
+        )
+        self.async_kafka_stage_publisher = AsyncKafkaStagePublisher(
+            enabled=self.config.routing.publish_events_to_kafka,
+            instance_mode=self.config.routing.instance_mode,
+            bootstrap_servers=self.config.paths.kafka_bootstrap_servers,
+            topic_prefix=self.config.paths.kafka_topic_prefix,
+            fallback_topic=self.config.paths.kafka_topic,
+        )
+
         self.stages = [
             IngestionStage(),
             PreprocessingStage(),
@@ -122,6 +145,20 @@ class PipelineML:
                 debug_dir=context.debug_dir,
             )
 
+            if self.config.routing.instance_mode:
+                self.async_mongo_stage_writer.queue_stage_metric(
+                    request_id=req_id,
+                    stage=stage.name,
+                    elapsed_ms=elapsed_ms,
+                    payload=payload,
+                )
+                self.async_kafka_stage_publisher.publish_stage_completed(
+                    request_id=req_id,
+                    stage=stage.name,
+                    elapsed_ms=elapsed_ms,
+                    payload=payload,
+                )
+
             if self.config.routing.publish_events_to_kafka or self.config.routing.invoke_lambda_for_metrics:
                 self.event_bridge.publish_progress(
                     {
@@ -158,7 +195,13 @@ class PipelineML:
         outputs["s3"] = s3_result
         outputs["mongo"] = mongo_result
 
-        # ── JSON clínico consolidado ───────────────────────────────────
+        # ── Flush fire-and-forget sinks antes de retornar ─────────────
+        if self.config.routing.instance_mode:
+            mongo_flush = self.async_mongo_stage_writer.flush(timeout_seconds=5.0)
+            kafka_flush = self.async_kafka_stage_publisher.flush()
+            metrics["stage_sinks"] = {"mongo_flush": mongo_flush, "kafka_flush": kafka_flush}
+
+        # ── JSON clínico consolidado  FIX───────────────────────────────────
         clinical_result = _build_clinical_result(req_id, assets.full_name, payload)
         outputs["clinical_result"] = clinical_result
         clinical_json_path = context.outputs_dir / "clinical_result.json"

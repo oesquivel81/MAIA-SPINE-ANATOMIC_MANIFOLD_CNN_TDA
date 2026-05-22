@@ -4,9 +4,6 @@ metadata:
   name: maia-alb-ingress
   namespace: maia
   annotations:
-    # Especificar el AWS Load Balancer Controller
-    kubernetes.io/ingress.class: alb
-    
     # Tipo de load balancer
     alb.ingress.kubernetes.io/load-balancer-name: maia-alb
     
@@ -29,10 +26,11 @@ metadata:
     # Tags para AWS
     alb.ingress.kubernetes.io/tags: Environment=dev,Project=MAIA,ManagedBy=Terraform
     
-    # Subnets (opcional: especificar subnets públicas)
-    alb.ingress.kubernetes.io/subnets: subnet-* # Se reemplazará con subnets reales si es necesario
+    # Subnets públicas del VPC default (us-east-1a, us-east-1b, us-east-1c, us-east-1d)
+    alb.ingress.kubernetes.io/subnets: subnet-013c940ec293be0b2,subnet-0c6d8636fbd1d67f6,subnet-03b7a3532ca0a076f,subnet-091b9d3496c56d794
 
 spec:
+  ingressClassName: alb
   rules:
   # Ruta para API (Backend)
   - http:

@@ -40,7 +40,7 @@ output "security_group_id" {
 
 output "lab_role_arn" {
   description = "LabRole ARN"
-  value       = data.aws_iam_role.lab_role.arn
+  value       = var.lab_role_arn
 }
 
 output "log_group_name" {

@@ -13,7 +13,7 @@ Write-Host "[1/7] Reading Terraform outputs..."
 Push-Location $tfDir
 $target = terraform output -raw deployment_target
 if ($target -ne "eks") {
-    throw "Terraform deployment_target is '$target'. Set deployment_target = \"eks\" in infra/terraform/terraform.tfvars and apply first."
+    throw "Terraform deployment_target is '$target'. Set deployment_target = `"eks`" in infra/terraform/terraform.tfvars and apply first."
 }
 $ecrRepo = terraform output -raw ecr_repository_url
 $eksCluster = terraform output -raw eks_cluster_name

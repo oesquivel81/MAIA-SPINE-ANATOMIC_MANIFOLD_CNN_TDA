@@ -41,8 +41,8 @@ resource "aws_ecs_task_definition" "maia" {
   requires_compatibilities = ["EC2"]
   cpu                      = "512"
   memory                   = "1024"
-  execution_role_arn       = data.aws_iam_role.lab_role.arn
-  task_role_arn            = data.aws_iam_role.lab_role.arn
+  execution_role_arn       = var.lab_role_arn
+  task_role_arn            = var.lab_role_arn
 
   container_definitions = jsonencode([
     {
