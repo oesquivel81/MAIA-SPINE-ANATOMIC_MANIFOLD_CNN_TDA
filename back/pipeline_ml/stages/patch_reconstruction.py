@@ -349,6 +349,60 @@ class PatchReconstructionStage(PipelineStage):
         payload["gap_analysis"] = gap_analysis
         payload["spatial_index"] = spatial_index
         payload["recon_csv_path"] = str(csv_path)
+
+        # ── Debug: PNGs runtime + CSVs + payload keys ─────────────────
+        import pandas as _pd
+        debug_images: dict = payload.get("debug_images", {})
+        debug_csvs: dict   = payload.get("debug_csvs",   {})
+
+        for head in recon_maps:
+            rt_p = out_root / f"recon_{head}_runtime.png"
+            _arr = recon_maps[head]
+            _arr_u8 = (_arr * 255).clip(0, 255).astype(np.uint8)
+            cv2.imwrite(str(rt_p), _arr_u8)
+            debug_images[f"recon_{head}"] = str(rt_p)
+
+        cs_rt = out_root / "combined_gap_signal_runtime.png"
+        _cs_u8 = (combined_signal.clip(0, 1) * 255).astype(np.uint8)
+        cv2.imwrite(str(cs_rt), _cs_u8)
+        debug_images["combined_gap_signal"] = str(cs_rt)
+
+        df_events = gap_analysis.get("df_events")
+        df_profile = gap_analysis.get("df_profile")
+
+        peaks_df: _pd.DataFrame = (
+            df_events[df_events["kind"] == "peak"]
+            if df_events is not None and not df_events.empty
+            else _pd.DataFrame()
+        )
+        gaps_df: _pd.DataFrame = (
+            df_events[df_events["kind"] == "gap_peak"]
+            if df_events is not None and not df_events.empty
+            else _pd.DataFrame()
+        )
+
+        payload["df_vector"] = df_profile
+        payload["peaks_df"]  = peaks_df
+        payload["gaps_df"]   = gaps_df
+
+        freq_csv_rt = out_root / "frequency_profile_runtime.csv"
+        if df_profile is not None:
+            df_profile.to_csv(str(freq_csv_rt), index=False)
+            debug_csvs["frequency_profile"] = str(freq_csv_rt)
+
+        peaks_csv_rt = out_root / "peaks_projected_to_curve_runtime.csv"
+        if not peaks_df.empty:
+            peaks_df.to_csv(str(peaks_csv_rt), index=False)
+            debug_csvs["peaks_projected"] = str(peaks_csv_rt)
+
+        gaps_csv_rt = out_root / "gaps_projected_to_curve_runtime.csv"
+        if not gaps_df.empty:
+            gaps_df.to_csv(str(gaps_csv_rt), index=False)
+            debug_csvs["gaps_projected"] = str(gaps_csv_rt)
+
+        payload["debug_images"] = debug_images
+        payload["debug_csvs"]   = debug_csvs
+
         payload["patch_reconstruction_done"] = True
         return payload
 

@@ -158,6 +158,7 @@ class StudentPatchStage(PipelineStage):
         csv_rows: list[dict] = []
         student_outputs: list[dict] = []
         student_masks: list[dict] = []
+        student_debug_outputs: list[dict] = []
 
         # Para visualización acumulada
         debug_inputs: list[np.ndarray] = []
@@ -199,6 +200,25 @@ class StudentPatchStage(PipelineStage):
                 cv2.imwrite(str(p), img_u8)
                 head_paths[head] = str(p)
 
+            # ── Guardar runtime PNGs para debug (flat en out_root) ────
+            runtime_paths: dict[str, str] = {}
+            for head in _HEADS:
+                rt_p = out_root / f"student_patch_{i:02d}_{head}.png"
+                cv2.imwrite(
+                    str(rt_p),
+                    (probs[head] * 255).clip(0, 255).astype(np.uint8),
+                )
+                runtime_paths[head] = str(rt_p)
+
+            # ── Overlay: input + boundary como mapa de calor ──────────
+            overlay_path = out_root / f"student_patch_{i:02d}_overlay.png"
+            input_bgr = cv2.cvtColor((patch_224 * 255).astype(np.uint8), cv2.COLOR_GRAY2BGR)
+            heat = (probs["boundary"] * 255).clip(0, 255).astype(np.uint8)
+            heat_color = cv2.applyColorMap(heat, cv2.COLORMAP_HOT)
+            overlay_img = cv2.addWeighted(input_bgr, 0.55, heat_color, 0.45, 0)
+            cv2.imwrite(str(overlay_path), overlay_img)
+            runtime_paths["overlay"] = str(overlay_path)
+
             # ── Métricas ──────────────────────────────────────────────
             for head in _HEADS:
                 prob = probs[head]
@@ -217,6 +237,12 @@ class StudentPatchStage(PipelineStage):
 
             student_outputs.append({"patch_idx": i, "input_path": str(input_path), **{h: probs[h] for h in _HEADS}})
             student_masks.append({"patch_idx": i, **{h: masks[h] for h in _HEADS}})
+            student_debug_outputs.append({
+                "patch_idx": i,
+                "input_path": str(input_path),
+                **{f"{h}_runtime": runtime_paths[h] for h in _HEADS},
+                "overlay_path": runtime_paths.get("overlay"),
+            })
             debug_inputs.append(patch_224)
             debug_probs.append(probs)
 
@@ -247,6 +273,7 @@ class StudentPatchStage(PipelineStage):
         payload["student_outputs"] = student_outputs
         payload["student_masks"] = student_masks
         payload["patch_input_paths"] = [so["input_path"] for so in student_outputs]
+        payload["student_debug_outputs"] = student_debug_outputs
         payload["student_done"] = True
         return payload
 

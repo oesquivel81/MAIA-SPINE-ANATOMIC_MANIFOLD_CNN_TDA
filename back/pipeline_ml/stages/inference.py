@@ -214,6 +214,10 @@ class InferenceStage(PipelineStage):
         }
         payload["inference_done"] = True
 
+        # ── Propagar debug a inference ─────────────────────────────────
+        payload["inference"]["debug_images"] = payload.get("debug_images", {})
+        payload["inference"]["debug_csvs"]   = payload.get("debug_csvs",   {})
+
         logger.info(
             f"InferenceStage: cluster_id dominante={result['dominant_cluster_id']}, "
             f"cobb_aprox={result['cobb_angle_deg']:.1f}°, "

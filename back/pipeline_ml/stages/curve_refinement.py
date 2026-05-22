@@ -223,6 +223,17 @@ class CurveRefinementStage(PipelineStage):
         payload["curve_meta_path"] = str(meta_path)
         payload["curve_refinement_done"] = True
 
+        # --- 6b. Debug: overlay de curva sobre imagen + dp_curve dict ---
+        overlay_path = out_dir / "refined_curve_overlay_runtime.png"
+        self._save_curve_overlay(image, dp_ys, dp_xs, overlay_path)
+        logger.info(f"CurveRefinementStage: overlay guardado → {overlay_path}")
+
+        payload["dp_curve"] = {"dp_ys": dp_ys.tolist(), "dp_xs": dp_xs.tolist()}
+
+        debug_images: dict = payload.get("debug_images", {})
+        debug_images["refined_curve_overlay"] = str(overlay_path)
+        payload["debug_images"] = debug_images
+
         return payload
 
     # ------------------------------------------------------------------
@@ -242,6 +253,27 @@ class CurveRefinementStage(PipelineStage):
         arr = CurveRefinementStage._normalize01(arr)
         img = (arr * 255).clip(0, 255).astype(np.uint8)
         cv2.imwrite(str(path), img)
+
+    @staticmethod
+    def _save_curve_overlay(
+        image: np.ndarray,
+        dp_ys: np.ndarray,
+        dp_xs: np.ndarray,
+        path: Path,
+        color: tuple = (0, 255, 0),
+        thickness: int = 2,
+    ) -> None:
+        """Guarda la imagen con la curva DP superpuesta en color."""
+        img8 = image.copy()
+        if img8.dtype != np.uint8:
+            img8 = np.clip(img8, 0, 255).astype(np.uint8)
+        if img8.ndim == 2:
+            overlay = cv2.cvtColor(img8, cv2.COLOR_GRAY2BGR)
+        else:
+            overlay = img8.copy()
+        pts = np.stack([dp_xs.astype(np.int32), dp_ys.astype(np.int32)], axis=1)
+        cv2.polylines(overlay, [pts], isClosed=False, color=color, thickness=thickness)
+        cv2.imwrite(str(path), overlay)
 
     @staticmethod
     def _make_image_likelihood(

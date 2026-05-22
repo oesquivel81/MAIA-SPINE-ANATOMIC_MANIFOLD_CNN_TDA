@@ -124,6 +124,10 @@ class BinaryCurveStage(PipelineStage):
         binary_mask_path = self._save_mask(binary_mask, "binary_mask.png", context, logger)
         curve_mask_path  = self._save_mask(curve_mask,  "curve_mask.png",  context, logger)
 
+        # --- 5b. Guardar copias runtime para debug ---
+        binary_runtime_path = self._save_mask(binary_mask, "binary_mask_runtime.png", context, logger)
+        curve_runtime_path  = self._save_mask(curve_mask,  "curve_mask_runtime.png",  context, logger)
+
         # --- 6. Visualización (solo si plots_show=True) ---
         if context.metadata.get("plots_show", False):
             self._show_image(image, title="Imagen normalizada → entrada CNN")
@@ -132,10 +136,15 @@ class BinaryCurveStage(PipelineStage):
             self._compare_masks(image, binary_mask, curve_mask)
 
         # --- 7. Actualizar payload ---
+        debug_images: dict = payload.get("debug_images", {})
+        debug_images["binary_mask"]  = str(binary_runtime_path)
+        debug_images["curve_mask"]   = str(curve_runtime_path)
+
         payload["binary_mask"]       = binary_mask
         payload["curve_mask"]        = curve_mask
         payload["binary_mask_path"]  = str(binary_mask_path)
         payload["curve_mask_path"]   = str(curve_mask_path)
+        payload["debug_images"]      = debug_images
         payload["binary_curve_done"] = True
 
         return payload
