@@ -30,6 +30,11 @@ class PipelineGapSummaryDTO(BaseModel):
     vertebra_csv_path: str | None = None
 
 
+class PipelineNerveCurveDTO(BaseModel):
+    """CSV de la curva espinal (nervio) con coordenadas y arclength."""
+    curve_csv_path: str | None = None
+
+
 class PipelineClinicalResultDTO(BaseModel):
     """DTO de salida del endpoint de análisis de columna.
 
@@ -42,6 +47,7 @@ class PipelineClinicalResultDTO(BaseModel):
     images: PipelineImagesDTO
     predictions: PipelinePredictionsDTO
     gap_summary: PipelineGapSummaryDTO
+    nerve_curve: PipelineNerveCurveDTO = PipelineNerveCurveDTO()
 
     @classmethod
     def from_pipeline_output(cls, outputs: dict) -> "PipelineClinicalResultDTO":
@@ -53,4 +59,5 @@ class PipelineClinicalResultDTO(BaseModel):
             images=PipelineImagesDTO(**(cr.get("images") or {})),
             predictions=PipelinePredictionsDTO(**(cr.get("predictions") or {})),
             gap_summary=PipelineGapSummaryDTO(**(cr.get("gap_summary") or {})),
+            nerve_curve=PipelineNerveCurveDTO(**(cr.get("nerve_curve") or {})),
         )
