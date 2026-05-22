@@ -1129,19 +1129,21 @@ class PatchReconstructionStage(PipelineStage):
         Genera ordered_vertebra_mask dividiendo el mapa binario en franjas
         horizontales delimitadas por los gap_peaks (espacios intervertebrales).
         Cada franja entre dos gap_peaks consecutivos = un cuerpo vertebral.
-        Retorna máscara int32 con labels 1..N (0 = fondo), o None si no hay gaps.
+        Retorna mascara int32 con labels 1..N (0 = fondo), o None si no hay gaps.
         """
         try:
-            import pandas as _pd
             gap_rows = df_events[df_events["kind"] == "gap_peak"].copy()
             if len(gap_rows) == 0:
                 return None
             gap_ys = sorted(gap_rows["curve_idx"].astype(float).tolist())
-            H, W   = binary_map.shape[0], (binary_map.shape[1] if binary_map.ndim > 1 else 1)
+            H = binary_map.shape[0]
+            W = binary_map.shape[1] if binary_map.ndim > 1 else 1
             binary_bin = (_normalize01_img(binary_map) > thr).astype(np.uint8)
             boundaries = [0.0] + gap_ys + [float(H)]
             ordered_mask = np.zeros((H, W), dtype=np.int32)
-            for label, (y0, y1) in enumerate(zip(boundaries[:-1], boundaries[1:]), start=1):
+            for label, (y0, y1) in enumerate(
+                zip(boundaries[:-1], boundaries[1:]), start=1
+            ):
                 y0i = max(0, int(round(y0)))
                 y1i = min(H, int(round(y1)))
                 ordered_mask[y0i:y1i, :] = np.where(
@@ -1327,10 +1329,10 @@ class PatchReconstructionStage(PipelineStage):
             )
             centroid_source = "ordered_mask"
         else:
-            # Intentar generar máscara por bandas de gap_peaks antes del fallback
-            df_events_pre = gap_analysis.get("df_events", pd.DataFrame())
+            # Generar mascara por bandas desde gap_peaks antes del fallback
+            _df_ev_pre = gap_analysis.get("df_events", pd.DataFrame())
             _auto_mask = PatchReconstructionStage._make_ordered_mask_from_gap_peaks(
-                binary_map, df_events_pre,
+                binary_map, _df_ev_pre,
             )
             if _auto_mask is not None and bool((_auto_mask > 0).any()):
                 df_centroids = PatchReconstructionStage._extract_centroids_from_ordered_mask(
