@@ -334,6 +334,13 @@ def _build_clinical_result(request_id: str, full_name: str, payload: dict[str, A
         "match_csv_path":     spatial_index.get("match_csv_path"),
     }
 
+    # ── Debug: imágenes y CSVs de todas las etapas ──────────────────
+    debug_images: dict = payload.get("debug_images") or {}
+    debug_csvs:   dict = payload.get("debug_csvs")   or {}
+    # También exponer los overlays de debug de curve_refinement directamente
+    if not debug_images.get("normalized_image") and payload.get("normalized_image_path"):
+        debug_images["normalized_image"] = payload["normalized_image_path"]
+
     return {
         "request_id":   request_id,
         "patient_name": full_name,
@@ -341,4 +348,6 @@ def _build_clinical_result(request_id: str, full_name: str, payload: dict[str, A
         "predictions":  predictions,
         "gap_summary":  gap_summary,
         "nerve_curve":  nerve_curve,
+        "debug_images": debug_images,
+        "debug_csvs":   debug_csvs,
     }

@@ -200,3 +200,13 @@ def _upload_artifacts_and_sign(clinical: dict, bucket: str, region: str, expires
     nerve_curve["peaks_csv_path"]     = _upload_and_sign(nerve_curve.get("peaks_csv_path"))
     nerve_curve["match_csv_path"]     = _upload_and_sign(nerve_curve.get("match_csv_path"))
     clinical["nerve_curve"] = nerve_curve
+    # ── Debug images y CSVs de todas las etapas ────────────────────────
+    debug_images = clinical.get("debug_images", {})
+    for key in list(debug_images.keys()):
+        debug_images[key] = _upload_and_sign(debug_images.get(key))
+    clinical["debug_images"] = debug_images
+
+    debug_csvs = clinical.get("debug_csvs", {})
+    for key in list(debug_csvs.keys()):
+        debug_csvs[key] = _upload_and_sign(debug_csvs.get(key))
+    clinical["debug_csvs"] = debug_csvs
