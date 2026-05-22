@@ -1120,6 +1120,40 @@ class PatchReconstructionStage(PipelineStage):
         return pd.DataFrame(rows)
 
     @staticmethod
+    def _make_ordered_mask_from_gap_peaks(
+        binary_map: np.ndarray,
+        df_events: "pd.DataFrame",
+        thr: float = 0.35,
+    ) -> "np.ndarray | None":
+        """
+        Genera ordered_vertebra_mask dividiendo el mapa binario en franjas
+        horizontales delimitadas por los gap_peaks (espacios intervertebrales).
+        Cada franja entre dos gap_peaks consecutivos = un cuerpo vertebral.
+        Retorna máscara int32 con labels 1..N (0 = fondo), o None si no hay gaps.
+        """
+        try:
+            import pandas as _pd
+            gap_rows = df_events[df_events["kind"] == "gap_peak"].copy()
+            if len(gap_rows) == 0:
+                return None
+            gap_ys = sorted(gap_rows["curve_idx"].astype(float).tolist())
+            H, W   = binary_map.shape[0], (binary_map.shape[1] if binary_map.ndim > 1 else 1)
+            binary_bin = (_normalize01_img(binary_map) > thr).astype(np.uint8)
+            boundaries = [0.0] + gap_ys + [float(H)]
+            ordered_mask = np.zeros((H, W), dtype=np.int32)
+            for label, (y0, y1) in enumerate(zip(boundaries[:-1], boundaries[1:]), start=1):
+                y0i = max(0, int(round(y0)))
+                y1i = min(H, int(round(y1)))
+                ordered_mask[y0i:y1i, :] = np.where(
+                    binary_bin[y0i:y1i, :] > 0,
+                    label,
+                    ordered_mask[y0i:y1i, :],
+                )
+            return ordered_mask
+        except Exception:
+            return None
+
+    @staticmethod
     def _extract_centroids_from_binary_components(
         binary: np.ndarray,
         min_area: int = 25,
@@ -1293,10 +1327,21 @@ class PatchReconstructionStage(PipelineStage):
             )
             centroid_source = "ordered_mask"
         else:
-            df_centroids = PatchReconstructionStage._extract_centroids_from_binary_components(
-                binary_map, min_area=int(_cfg["min_component_area"]),
+            # Intentar generar máscara por bandas de gap_peaks antes del fallback
+            df_events_pre = gap_analysis.get("df_events", pd.DataFrame())
+            _auto_mask = PatchReconstructionStage._make_ordered_mask_from_gap_peaks(
+                binary_map, df_events_pre,
             )
-            centroid_source = "binary_components"
+            if _auto_mask is not None and bool((_auto_mask > 0).any()):
+                df_centroids = PatchReconstructionStage._extract_centroids_from_ordered_mask(
+                    _auto_mask, min_area=int(_cfg["min_component_area"]),
+                )
+                centroid_source = "gap_peaks_bands"
+            else:
+                df_centroids = PatchReconstructionStage._extract_centroids_from_binary_components(
+                    binary_map, min_area=int(_cfg["min_component_area"]),
+                )
+                centroid_source = "binary_components"
         if len(df_centroids) > 0:
             df_centroids["patient_key"]     = patient_key
             df_centroids["centroid_source"] = centroid_source
