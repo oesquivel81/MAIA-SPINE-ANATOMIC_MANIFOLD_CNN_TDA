@@ -82,7 +82,10 @@ def _build_pipeline(settings: Settings) -> PipelineML:
 @router.post("/run")
 async def run_pipeline(
     file: Annotated[UploadFile, File(description="Imagen de entrada (PNG/DICOM/NPY)")],
-    full_assets: Annotated[str, Form(description="Assets string: FULL_NAME|joblib1;joblib2|res1;res2")] = "||",
+    nombre: Annotated[str, Form(description="Nombre del paciente")] = "paciente",
+    sexo: Annotated[str, Form(description="Sexo (M/F)")] = "",
+    edad: Annotated[str, Form(description="Edad en años")] = "",
+    peso: Annotated[str, Form(description="Peso en kg")] = "",
     settings: Settings = Depends(get_settings),
 ) -> dict:
     raw = await file.read()
@@ -102,14 +105,71 @@ async def run_pipeline(
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"No se pudo decodificar imagen: {exc}") from exc
 
-    pipeline = _build_pipeline(settings)
-    result = pipeline.run(image=image, full_assets=full_assets)
+    # Construir patient_key desde datos del paciente
+    parts = [nombre.strip().upper().replace(" ", "_") or "PACIENTE"]
+    if sexo.strip():
+        parts.append(sexo.strip().upper())
+    if edad.strip():
+        parts.append(f"{edad.strip()}A")
+    if peso.strip():
+        parts.append(f"{peso.strip()}KG")
+    patient_key = "_".join(parts)
 
-    return {
-        "request_id": result.request_id,
-        "ok": result.ok,
-        "total_ms": result.metrics.get("total_ms"),
-        "step_durations_ms": result.metrics.get("step_durations_ms", {}),
-        "stage_sinks": result.metrics.get("stage_sinks"),
-        "progress": result.metrics.get("progress_messages", []),
-    }
+    # Resolver modelos desde S3 (o retornar path local si ya existe en caché)
+    j0 = _resolve_model_path(settings.pipeline_binary_curve_model_path, settings.aws_s3_bucket, settings.aws_region, settings.pipeline_models_local_dir)
+    j1 = _resolve_model_path(settings.pipeline_student_patch_model_path, settings.aws_s3_bucket, settings.aws_region, settings.pipeline_models_local_dir)
+    j2 = _resolve_model_path(settings.pipeline_clustering_model_path, settings.aws_s3_bucket, settings.aws_region, settings.pipeline_models_local_dir)
+    resolved_assets = f"{patient_key}|{j0};{j1};{j2}|"
+
+    pipeline = _build_pipeline(settings)
+    result = pipeline.run(image=image, full_assets=resolved_assets)
+
+    clinical = result.outputs.get("clinical_result")
+    if not clinical:
+        raise HTTPException(status_code=500, detail="El pipeline no generó clinical_result")
+
+    # Subir imágenes a S3 y reemplazar rutas con presigned URLs
+    _upload_artifacts_and_sign(clinical, settings.aws_s3_bucket, settings.aws_region)
+
+    return clinical
+
+
+def _upload_artifacts_and_sign(clinical: dict, bucket: str, region: str, expires_in: int = 3600) -> None:
+    """Sube archivos locales del pipeline a S3 y reemplaza las rutas con presigned URLs."""
+    s3 = boto3.client("s3", region_name=region)
+    container_root = Path("/app")
+    artifacts_root = (container_root / "pipeline_ml_artifacts").resolve()
+
+    def _upload_and_sign(local_path: str | None) -> str | None:
+        if not local_path:
+            return local_path
+        p = Path(local_path)
+        abs_p = p if p.is_absolute() else container_root / p
+        # Seguridad: solo permitir rutas dentro de pipeline_ml_artifacts
+        try:
+            abs_p.resolve().relative_to(artifacts_root)
+        except ValueError:
+            return local_path
+        if not abs_p.exists():
+            return local_path
+        try:
+            s3_key = str(abs_p.relative_to(container_root)).replace("\\", "/")
+        except ValueError:
+            s3_key = str(p).replace("\\", "/").lstrip("/")
+        try:
+            content_type = "image/png" if s3_key.endswith(".png") else "application/octet-stream"
+            s3.upload_file(str(abs_p), bucket, s3_key, ExtraArgs={"ContentType": content_type})
+            return s3.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": bucket, "Key": s3_key},
+                ExpiresIn=expires_in,
+            )
+        except Exception:
+            return local_path  # Si falla, retornar ruta original sin romper la respuesta
+
+    images = clinical.get("images", {})
+    for field in ("combined_signal", "analysis_grid", "gap_peak_analysis",
+                  "spatial_index_panel", "binary_mask", "curve_mask", "normalized_image"):
+        images[field] = _upload_and_sign(images.get(field))
+
+    images["patch_inputs"] = [_upload_and_sign(p) for p in images.get("patch_inputs", [])]

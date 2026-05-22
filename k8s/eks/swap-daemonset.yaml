@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-swap-enabler
+  namespace: kube-system
+  labels:
+    app: node-swap-enabler
+spec:
+  selector:
+    matchLabels:
+      app: node-swap-enabler
+  template:
+    metadata:
+      labels:
+        app: node-swap-enabler
+    spec:
+      hostPID: true
+      hostIPC: true
+      tolerations:
+        - operator: Exists
+      initContainers:
+        - name: swap-setup
+          image: amazonlinux:2023
+          securityContext:
+            privileged: true
+          command:
+            - nsenter
+            - "--mount=/proc/1/ns/mnt"
+            - "--"
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              if swapon --show | grep -q /swapfile; then
+                echo "Swap already active, skipping"
+                exit 0
+              fi
+              dd if=/dev/zero of=/swapfile bs=1M count=2048 status=progress
+              chmod 600 /swapfile
+              mkswap /swapfile
+              swapon /swapfile
+              sysctl -w vm.swappiness=10
+              echo "Swap enabled: $(swapon --show)"
+          volumeMounts:
+            - name: host-root
+              mountPath: /host
+      containers:
+        - name: pause
+          image: public.ecr.aws/eks-distro/kubernetes/pause:3.9
+          resources:
+            requests:
+              cpu: 1m
+              memory: 5Mi
+            limits:
+              cpu: 5m
+              memory: 10Mi
+      volumes:
+        - name: host-root
+          hostPath:
+            path: /

@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     # Local:   /content/experiments/...  (Colab — nunca se usa en EKS)
     pipeline_binary_curve_model_path: str = ""
     pipeline_student_patch_model_path: str = ""
+    pipeline_clustering_model_path: str = ""
     pipeline_models_local_dir: str = "/tmp/pipeline_models"
 
     model_config = SettingsConfigDict(

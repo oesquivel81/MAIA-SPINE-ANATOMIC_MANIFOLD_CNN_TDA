@@ -5,6 +5,8 @@ metadata:
   namespace: maia
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: backend
@@ -56,8 +58,17 @@ spec:
               value: experiments/v02A/pipeline_model/01_binary_curve_cnn/last_binary_curve_model.pt
             - name: PIPELINE_STUDENT_PATCH_MODEL_PATH
               value: experiments/v02A/pipeline_model/02_student_1ch_4heads/student_1ch_multihead_ALL_FINETUNES_CHECKOUTS_20260520_004121_current_loaded_full_checkpoint.pt
+            - name: PIPELINE_CLUSTERING_MODEL_PATH
+              value: experiments/v02A/pipeline_model/04_clustering_tda/region_clustering_24_types_probabilistic_bundle.joblib
             - name: PIPELINE_MODELS_LOCAL_DIR
               value: /tmp/pipeline_models
+          resources:
+            requests:
+              memory: "1000Mi"
+              cpu: "500m"
+            limits:
+              memory: "1700Mi"
+              cpu: "1500m"
           readinessProbe:
             httpGet:
               path: /api/v1/health
