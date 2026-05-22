@@ -103,6 +103,13 @@ type CurvePoint = {
   y: number;
 };
 
+type SpineCurveRow = {
+  curve_idx: number;
+  x_curve: number;
+  y_curve: number;
+  t_norm: number;
+};
+
 type ClusterSummary = {
   name: string;
   clusterId: number;
@@ -625,12 +632,21 @@ export default function App() {
   const [regionFilter, setRegionFilter] = useState<'all' | RegionName>('all');
   const [heatRotation, setHeatRotation] = useState(18);
   const [heatZoom, setHeatZoom] = useState(1);
+  const [liveRegionCandidates, setLiveRegionCandidates] = useState<RegionCandidate[] | null>(null);
+  const [spineRealCurve, setSpineRealCurve] = useState<SpineCurveRow[] | null>(null);
 
   const summary = useMemo(() => buildDashboardSummary(analysisData ?? undefined), [analysisData]);
   const dashboardImages = useMemo(() => buildDashboardImages(analysisData ?? undefined), [analysisData]);
+
+  // Candidatos activos: real del backend si disponibles, si no mock
+  const activeCandidates = useMemo(
+    () => liveRegionCandidates ?? regionCandidates,
+    [liveRegionCandidates],
+  );
+
   const dashboardClusters = useMemo(
-    () => buildClusterSummary(regionCandidates, analysisData?.predictions.n_clusters_detected),
-    [analysisData?.predictions.n_clusters_detected],
+    () => buildClusterSummary(activeCandidates, analysisData?.predictions.n_clusters_detected),
+    [activeCandidates, analysisData?.predictions.n_clusters_detected],
   );
 
   useEffect(() => {
@@ -644,13 +660,53 @@ export default function App() {
     }));
   }, [analysisData]);
 
+  // Cargar clinical_regions.csv → RegionCandidate[] reales
+  useEffect(() => {
+    const url = analysisData?.predictions.regions_csv_path;
+    if (!url) {
+      setLiveRegionCandidates(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(url)
+      .then((r) => r.text())
+      .then((text) => {
+        if (!cancelled) {
+          const rows = parseRegionsCSV(text);
+          if (rows.length > 0) setLiveRegionCandidates(rows);
+        }
+      })
+      .catch(() => { if (!cancelled) setLiveRegionCandidates(null); });
+    return () => { cancelled = true; };
+  }, [analysisData?.predictions.regions_csv_path]);
+
+  // Cargar curve_spatial_index.csv → SpineCurveRow[] reales
+  useEffect(() => {
+    const url = analysisData?.nerve_curve?.curve_csv_path;
+    if (!url) {
+      setSpineRealCurve(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(url)
+      .then((r) => r.text())
+      .then((text) => {
+        if (!cancelled) {
+          const rows = parseCurveCSV(text);
+          if (rows.length > 0) setSpineRealCurve(rows);
+        }
+      })
+      .catch(() => { if (!cancelled) setSpineRealCurve(null); });
+    return () => { cancelled = true; };
+  }, [analysisData?.nerve_curve?.curve_csv_path]);
+
   const filteredCandidates = useMemo(() => {
-    return regionCandidates.filter((candidate) => {
+    return activeCandidates.filter((candidate) => {
       const clusterOk = clusterFilter === 'all' || candidate.cluster_id === clusterFilter;
       const regionOk = regionFilter === 'all' || candidate.anatomic_region_probable === regionFilter;
       return clusterOk && regionOk;
     });
-  }, [clusterFilter, regionFilter]);
+  }, [activeCandidates, clusterFilter, regionFilter]);
 
   const orderedCandidates = useMemo(() => {
     return [...filteredCandidates].sort((left, right) => {
@@ -670,13 +726,15 @@ export default function App() {
     return (
       orderedCandidates.find((candidate) => candidate.peak_idx === selectedPeakIdx) ??
       orderedCandidates[0] ??
+      activeCandidates[0] ??
       regionCandidates[0]
     );
-  }, [orderedCandidates, selectedPeakIdx]);
+  }, [orderedCandidates, selectedPeakIdx, activeCandidates]);
 
   const selectedCurvePoint = useMemo(() => {
+    if (spineRealCurve) return curvePointFromRealData(selectedCandidate.curve_idx, spineRealCurve);
     return curvePointForCandidate(selectedCandidate, curveBounds);
-  }, [curveBounds, selectedCandidate]);
+  }, [curveBounds, selectedCandidate, spineRealCurve]);
 
   const selectedClusterSummary = useMemo(() => {
     return dashboardClusters.find((entry) => entry.clusterId === selectedCandidate.cluster_id);
@@ -684,7 +742,7 @@ export default function App() {
 
   const patchCards: PatchInfo[] = useMemo(() => {
     return dashboardImages.patchInputs.map((src, index) => {
-      const candidate = regionCandidates[index];
+      const candidate = activeCandidates[index];
       return {
         id: index + 1,
         region: candidate ? readableRegion(candidate.anatomic_region_probable) : `Orden anatómico ${index + 1}`,
@@ -693,7 +751,7 @@ export default function App() {
         src,
       };
     });
-  }, [analysisData?.predictions.dominant_cluster_id, dashboardImages.patchInputs]);
+  }, [analysisData?.predictions.dominant_cluster_id, dashboardImages.patchInputs, activeCandidates]);
 
   const handleSelectCandidate = (candidate: RegionCandidate) => {
     setSelectedPeakIdx(candidate.peak_idx);
@@ -704,7 +762,7 @@ export default function App() {
     setSliderValue(value);
     const nearest = orderedCandidates.reduce((closest, candidate) => {
       return Math.abs(candidate.curve_idx - value) < Math.abs(closest.curve_idx - value) ? candidate : closest;
-    }, orderedCandidates[0] ?? regionCandidates[0]);
+    }, orderedCandidates[0] ?? activeCandidates[0] ?? regionCandidates[0]);
     handleSelectCandidate(nearest);
   };
 
@@ -728,7 +786,7 @@ export default function App() {
       setClusterFilter('all');
       setRegionFilter('all');
       setHeatMetric('gap_strength_mean');
-      handleSelectCandidate(regionCandidates[0]);
+      handleSelectCandidate(activeCandidates[0] ?? regionCandidates[0]);
       resetHeatmap();
       toast.success('Análisis cargado desde el backend');
     } catch (error) {
@@ -746,6 +804,8 @@ export default function App() {
     setClusterFilter('all');
     setRegionFilter('all');
     setHeatMetric('gap_strength_mean');
+    setLiveRegionCandidates(null);
+    setSpineRealCurve(null);
     handleSelectCandidate(regionCandidates[9]);
     resetHeatmap();
     toast.success('Dashboard reiniciado para un nuevo análisis');
@@ -786,6 +846,7 @@ export default function App() {
                       sliderValue={sliderValue}
                       onSliderChange={handleSliderChange}
                       onSelectCandidate={handleSelectCandidate}
+                      realCurve={spineRealCurve ?? undefined}
                     />
                   </div>
                 </div>
@@ -803,6 +864,7 @@ export default function App() {
                       onReset={resetHeatmap}
                       onMetricChange={setHeatMetric}
                       onSelectCandidate={handleSelectCandidate}
+                      realCurve={spineRealCurve ?? undefined}
                     />
                   </div>
                 </div>
@@ -1186,6 +1248,7 @@ function DynamicCurveSection({
   sliderValue,
   onSliderChange,
   onSelectCandidate,
+  realCurve,
 }: {
   candidates: RegionCandidate[];
   selectedCandidate: RegionCandidate;
@@ -1193,6 +1256,7 @@ function DynamicCurveSection({
   sliderValue: number;
   onSliderChange: (value: number) => void;
   onSelectCandidate: (candidate: RegionCandidate) => void;
+  realCurve?: SpineCurveRow[];
 }) {
   return (
     <SectionCard
@@ -1205,6 +1269,7 @@ function DynamicCurveSection({
           selectedCandidate={selectedCandidate}
           selectedCurvePoint={selectedCurvePoint}
           onSelectCandidate={onSelectCandidate}
+          realCurve={realCurve}
         />
         <GapPeakChart candidates={candidates} selectedCandidate={selectedCandidate} onSelectCandidate={onSelectCandidate} />
       </div>
@@ -1237,14 +1302,19 @@ function DynamicCurveViewer({
   selectedCandidate,
   selectedCurvePoint,
   onSelectCandidate,
+  realCurve,
 }: {
   candidates: RegionCandidate[];
   selectedCandidate: RegionCandidate;
   selectedCurvePoint: { x: number; y: number };
   onSelectCandidate: (candidate: RegionCandidate) => void;
+  realCurve?: SpineCurveRow[];
 }) {
   const bounds = useMemo(() => curveBoundsFromCandidates(candidates), [candidates]);
-  const path = useMemo(() => buildCurvePath(bounds), [bounds]);
+  const path = useMemo(
+    () => realCurve ? buildRealCurvePath(realCurve) : buildCurvePath(bounds),
+    [bounds, realCurve],
+  );
 
   return (
     <div className="rounded-2xl border border-[#1e324a] bg-[#091320] p-4">
@@ -1263,7 +1333,9 @@ function DynamicCurveViewer({
         <rect x="75" y="28" width="170" height="544" rx="26" fill="rgba(15, 23, 42, 0.42)" />
         <path d={path} fill="none" stroke="#2196f3" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
         {candidates.map((candidate) => {
-          const point = curvePointForCandidate(candidate, bounds);
+          const point = realCurve
+            ? curvePointFromRealData(candidate.curve_idx, realCurve)
+            : curvePointForCandidate(candidate, bounds);
           const selected = candidate.peak_idx === selectedCandidate.peak_idx;
           return (
             <g key={candidate.peak_idx} onClick={() => onSelectCandidate(candidate)} className="cursor-pointer">
@@ -1353,6 +1425,7 @@ function SpineHeatmap3D({
   onReset,
   onMetricChange,
   onSelectCandidate,
+  realCurve,
 }: {
   candidates: RegionCandidate[];
   selectedPeakIdx: number;
@@ -1364,6 +1437,7 @@ function SpineHeatmap3D({
   onReset: () => void;
   onMetricChange: (value: MetricMode) => void;
   onSelectCandidate: (candidate: RegionCandidate) => void;
+  realCurve?: SpineCurveRow[];
 }) {
   const bounds = useMemo(() => curveBoundsFromCandidates(candidates), [candidates]);
 
@@ -1387,7 +1461,9 @@ function SpineHeatmap3D({
             style={{ transform: `rotateY(${rotation}deg) rotateX(12deg) scale(${zoom})`, transformStyle: 'preserve-3d' }}
           >
             {candidates.map((candidate) => {
-              const point = curvePointForCandidate(candidate, bounds);
+              const point = realCurve
+                ? curvePointFromRealData(candidate.curve_idx, realCurve)
+                : curvePointForCandidate(candidate, bounds);
               const t = curveTFromIdx(candidate.curve_idx, bounds);
               const metricValue = candidate[metricMode];
               const intensityColor = heatColor(metricValue, metricMode);
@@ -2059,7 +2135,90 @@ function heatColor(value: number, mode: MetricMode) {
   return '#ef4444';
 }
 
-function buildPanelImage(title: string, subtitle: string, accent: string, includeSignal = false) {
+// ─── CSV parsing utilities ────────────────────────────────────────────────────
+
+function parseCSV(text: string): Record<string, string>[] {
+  const lines = text.trim().split('\n');
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(',').map((h) => h.trim());
+  return lines.slice(1).map((line) => {
+    const values = line.split(',');
+    return Object.fromEntries(headers.map((h, i) => [h, (values[i] ?? '').trim()]));
+  });
+}
+
+function parseRegionsCSV(text: string): RegionCandidate[] {
+  return parseCSV(text)
+    .filter((row) => row.peak_idx !== undefined && row.peak_idx !== '')
+    .map((row, index) => ({
+      peak_idx: parseInt(row.peak_idx || '') || index + 1,
+      curve_idx: parseFloat(row.curve_idx || '') || 0,
+      t_norm: parseFloat(row.t_norm || '') || 0,
+      vertebra_id: parseInt(row.vertebra_id || '') || index + 1,
+      anatomic_region_probable: (row.anatomic_region_probable as RegionName) || 'thoracic_probable',
+      cluster_id: parseInt(row.cluster_id || '') || 0,
+      cluster_probability: parseFloat(row.cluster_probability || '') || 0,
+      cluster_entropy: parseFloat(row.cluster_entropy || '') || 0,
+      gap_strength_mean: parseFloat(row.gap_strength_mean || '') || 0,
+      peak_height: parseFloat(row.peak_height || '') || 0,
+      peak_highpass_value: parseFloat(row.peak_highpass_value || '') || 0,
+      left_gap_strength: parseFloat(row.left_gap_strength || '') || 0,
+      right_gap_strength: parseFloat(row.right_gap_strength || '') || 0,
+      wavelength_prev: parseFloat(row.wavelength_prev || '') || 0,
+      wavelength_next: parseFloat(row.wavelength_next || '') || 0,
+      kind: 'gap_peak' as const,
+      intervertebral_norm: 0,
+      boundary_norm: 0,
+      combined_signal: 0,
+      prominence: 0,
+    }));
+}
+
+function parseCurveCSV(text: string): SpineCurveRow[] {
+  return parseCSV(text)
+    .filter((row) => row.curve_idx !== undefined && row.curve_idx !== '')
+    .map((row) => ({
+      curve_idx: parseFloat(row.curve_idx || '') || 0,
+      x_curve: parseFloat(row.x_curve || '') || 0,
+      y_curve: parseFloat(row.y_curve || '') || 0,
+      t_norm: parseFloat(row.t_norm || '') || 0,
+    }));
+}
+
+function curvePointFromRealData(curveIdx: number, realCurve: SpineCurveRow[]): CurvePoint {
+  if (!realCurve.length) return { x: 160, y: 300 };
+  let best = realCurve[0];
+  for (const row of realCurve) {
+    if (Math.abs(row.curve_idx - curveIdx) < Math.abs(best.curve_idx - curveIdx)) best = row;
+  }
+  const xValues = realCurve.map((r) => r.x_curve);
+  const xMin = Math.min(...xValues);
+  const xMax = Math.max(...xValues);
+  const xRange = Math.max(xMax - xMin, 1);
+  const xNorm = (best.x_curve - xMin) / xRange;
+  return {
+    x: 80 + xNorm * 160,
+    y: 34 + best.t_norm * 520,
+  };
+}
+
+function buildRealCurvePath(realCurve: SpineCurveRow[]): string {
+  if (!realCurve.length) return '';
+  const xValues = realCurve.map((r) => r.x_curve);
+  const xMin = Math.min(...xValues);
+  const xMax = Math.max(...xValues);
+  const xRange = Math.max(xMax - xMin, 1);
+  const step = Math.max(1, Math.floor(realCurve.length / 96));
+  return realCurve
+    .filter((_, i) => i % step === 0)
+    .map((row, i) => {
+      const xNorm = (row.x_curve - xMin) / xRange;
+      return `${i === 0 ? 'M' : 'L'} ${80 + xNorm * 160} ${34 + row.t_norm * 520}`;
+    })
+    .join(' ');
+}
+
+title: string, subtitle: string, accent: string, includeSignal = false) {
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600">
       <defs>

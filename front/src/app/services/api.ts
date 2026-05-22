@@ -107,6 +107,7 @@ function normalizeAnalysisResponse(payload: unknown): AnalysisData {
   const gapSummary = (clinical.gap_summary as Record<string, unknown> | undefined) || {};
 
   const patchInputs = extractPatchInputs(raw, clinical, images);
+  const nerveCurveRaw = (clinical.nerve_curve as Record<string, unknown> | undefined) || {};
 
   return {
     request_id: String(clinical.request_id ?? raw.request_id ?? ''),
@@ -138,6 +139,12 @@ function normalizeAnalysisResponse(payload: unknown): AnalysisData {
       n_peaks: typeof gapSummary.n_peaks === 'number' ? gapSummary.n_peaks : undefined,
       n_gap_peaks: typeof gapSummary.n_gap_peaks === 'number' ? gapSummary.n_gap_peaks : undefined,
       vertebra_csv_path: resolveArtifactUrl(gapSummary.vertebra_csv_path as string | undefined),
+    },
+    nerve_curve: {
+      curve_csv_path: resolveArtifactUrl(nerveCurveRaw.curve_csv_path as string | undefined),
+      centroids_csv_path: resolveArtifactUrl(nerveCurveRaw.centroids_csv_path as string | undefined),
+      peaks_csv_path: resolveArtifactUrl(nerveCurveRaw.peaks_csv_path as string | undefined),
+      match_csv_path: resolveArtifactUrl(nerveCurveRaw.match_csv_path as string | undefined),
     },
     originalImageUrl: undefined,
   };
