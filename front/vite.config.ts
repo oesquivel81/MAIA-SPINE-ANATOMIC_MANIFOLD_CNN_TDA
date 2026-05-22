@@ -34,7 +34,7 @@ export default defineConfig({
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
   assetsInclude: ['**/*.svg', '**/*.csv'],
 
-  // Proxy para desarrollo local — reenvía /api al backend
+  // Proxy para desarrollo local — reenvía /api al backend (cubre /api/v1 también)
   server: {
     proxy: {
       '/api': {
