@@ -1,4 +1,7 @@
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+// En producción (EKS/ALB) la ruta relativa /api/v1 va al mismo host → ALB → backend.
+// En dev, Vite proxy reenvía /api a localhost:8000.
+// Se puede sobreescribir con VITE_API_URL en .env.
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? '/api/v1';
 
 export interface FileMetadata {
   file_id: string;

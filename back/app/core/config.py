@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     pipeline_clustering_model_path: str = ""
     pipeline_models_local_dir: str = "/tmp/pipeline_models"
 
+    # CORS: lista separada por comas de orígenes permitidos.
+    # Ejemplo en application.properties:  cors_allowed_origins=http://localhost:5173,http://mi-alb.elb.amazonaws.com
+    # Dejar vacío para usar solo los defaults de dev (localhost:5173, localhost:3000).
+    cors_allowed_origins: str = ""
+
     model_config = SettingsConfigDict(
         env_file=("application.properties", ".env"),
         env_file_encoding="utf-8",

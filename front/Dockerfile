@@ -4,17 +4,16 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 ENV CI=true
 COPY package.json pnpm-lock.yaml ./
+# Habilitar corepack separado para cache de esta capa
+RUN corepack enable && corepack pnpm config set ignore-scripts true
 
-# Force pnpm to skip the interactive native module script blocks:
-RUN corepack enable && corepack pnpm config set ignore-scripts true && corepack pnpm install --no-frozen-lockfile
-
-
+# Copiar el resto del código fuente
 COPY . .
-RUN corepack pnpm build
+# Instalar (--no-frozen-lockfile por si el lockfile está desactualizado) y compilar
+RUN corepack pnpm install --no-frozen-lockfile && corepack pnpm build
 
 # Production stage
 FROM nginx:1.27-alpine
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
-EXPOSE 3000
-#CMD ["corepack", "pnpm", "preview", "--port", "3000", "--host", "0.0.0.0"]
+EXPOSE 80

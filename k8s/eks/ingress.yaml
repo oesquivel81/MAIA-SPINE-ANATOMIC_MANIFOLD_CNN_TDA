@@ -1,38 +1,36 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Ingress BACKEND  —  /api  →  backend:8000
+# Usa IngressGroup "maia-alb-group" para compartir el mismo ALB con frontend.
+# group.order: 10 garantiza que esta regla tenga mayor prioridad que la del frontend.
+# ─────────────────────────────────────────────────────────────────────────────
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: maia-alb-ingress
+  name: maia-alb-ingress-backend
   namespace: maia
   annotations:
-    # Tipo de load balancer
+    # IngressGroup → comparten el mismo ALB
+    alb.ingress.kubernetes.io/group.name: maia-alb-group
+    alb.ingress.kubernetes.io/group.order: '10'
+
+    # Configuración del ALB (solo se necesita en el primer miembro del grupo)
     alb.ingress.kubernetes.io/load-balancer-name: maia-alb
-    
-    # Esquema: internet-facing para acceso público
     alb.ingress.kubernetes.io/scheme: internet-facing
-    
-    # Target type
     alb.ingress.kubernetes.io/target-type: ip
-    
-    # Puertos
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
-    
-    # Health check
+    alb.ingress.kubernetes.io/subnets: subnet-013c940ec293be0b2,subnet-0c6d8636fbd1d67f6,subnet-03b7a3532ca0a076f,subnet-091b9d3496c56d794
+    alb.ingress.kubernetes.io/tags: Environment=dev,Project=MAIA,ManagedBy=Terraform
+
+    # Health check específico del backend
     alb.ingress.kubernetes.io/healthcheck-path: /api/v1/health
     alb.ingress.kubernetes.io/healthcheck-interval-seconds: '30'
     alb.ingress.kubernetes.io/healthcheck-timeout-seconds: '5'
     alb.ingress.kubernetes.io/healthy-threshold-count: '2'
     alb.ingress.kubernetes.io/unhealthy-threshold-count: '2'
-    
-    # Tags para AWS
-    alb.ingress.kubernetes.io/tags: Environment=dev,Project=MAIA,ManagedBy=Terraform
-    
-    # Subnets públicas del VPC default (us-east-1a, us-east-1b, us-east-1c, us-east-1d)
-    alb.ingress.kubernetes.io/subnets: subnet-013c940ec293be0b2,subnet-0c6d8636fbd1d67f6,subnet-03b7a3532ca0a076f,subnet-091b9d3496c56d794
 
 spec:
   ingressClassName: alb
   rules:
-  # Ruta para API (Backend)
   - http:
       paths:
       - path: /api
@@ -43,7 +41,34 @@ spec:
             port:
               number: 8000
 
-  # Ruta raíz (Frontend)
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Ingress FRONTEND  —  /  →  frontend:80
+# Mismo grupo que el backend (maia-alb-group), prioridad menor (order: 20).
+# El health check apunta a "/" que nginx sirve correctamente.
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: maia-alb-ingress-frontend
+  namespace: maia
+  annotations:
+    alb.ingress.kubernetes.io/group.name: maia-alb-group
+    alb.ingress.kubernetes.io/group.order: '20'
+
+    # target-type ip requerido (igual que backend) para pods directos sin NodePort
+    alb.ingress.kubernetes.io/target-type: ip
+
+    # Health check específico del frontend
+    alb.ingress.kubernetes.io/healthcheck-path: /
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: '30'
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: '5'
+    alb.ingress.kubernetes.io/healthy-threshold-count: '2'
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: '2'
+
+spec:
+  ingressClassName: alb
+  rules:
   - http:
       paths:
       - path: /
