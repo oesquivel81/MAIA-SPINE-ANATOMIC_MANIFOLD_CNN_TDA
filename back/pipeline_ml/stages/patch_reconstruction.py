@@ -1425,16 +1425,19 @@ class PatchReconstructionStage(PipelineStage):
             if len(df_match) > 0 else 0
         )
         return {
-            "patient_key":    patient_key,
-            "df_curve":       df_curve,
-            "df_centroids":   df_centroids_proj,
-            "df_peaks":       df_peaks_proj,
-            "df_match":       df_match,
-            "panel_path":     str(panel_path),
-            "curve_csv_path": str(out_dir / "curve_spatial_index.csv"),
-            "n_centroids":    len(df_centroids_proj),
-            "n_peaks_proj":   len(df_peaks_proj),
-            "n_matches":      n_matches,
+            "patient_key":      patient_key,
+            "df_curve":         df_curve,
+            "df_centroids":     df_centroids_proj,
+            "df_peaks":         df_peaks_proj,
+            "df_match":         df_match,
+            "panel_path":       str(panel_path),
+            "curve_csv_path":      str(out_dir / "curve_spatial_index.csv"),
+            "centroids_csv_path": str(out_dir / "centroids_projected_to_curve.csv"),
+            "peaks_csv_path":     str(out_dir / "peaks_projected_to_curve.csv"),
+            "match_csv_path":     str(out_dir / "centroid_peak_spatial_index.csv"),
+            "n_centroids":      len(df_centroids_proj),
+            "n_peaks_proj":     len(df_peaks_proj),
+            "n_matches":        n_matches,
         }
 
 

@@ -326,9 +326,12 @@ def _build_clinical_result(request_id: str, full_name: str, payload: dict[str, A
         "vertebra_csv_path": gap_analysis.get("vertebra_csv") or gap_analysis.get("vertebra_csv_path"),
     }
 
-    # ── Curva espinal (nervio) ─────────────────────────────────────────
+    # ── Curva espinal (nervio) + índice espacial completo ───────────────
     nerve_curve: dict[str, Any] = {
-        "curve_csv_path": spatial_index.get("curve_csv_path"),
+        "curve_csv_path":     spatial_index.get("curve_csv_path"),
+        "centroids_csv_path": spatial_index.get("centroids_csv_path"),
+        "peaks_csv_path":     spatial_index.get("peaks_csv_path"),
+        "match_csv_path":     spatial_index.get("match_csv_path"),
     }
 
     return {

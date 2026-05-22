@@ -31,8 +31,11 @@ class PipelineGapSummaryDTO(BaseModel):
 
 
 class PipelineNerveCurveDTO(BaseModel):
-    """CSV de la curva espinal (nervio) con coordenadas y arclength."""
-    curve_csv_path: str | None = None
+    """CSVs del índice espacial espinal: curva, centroides, peaks y match."""
+    curve_csv_path:      str | None = None  # 240 puntos de la curva continua
+    centroids_csv_path:  str | None = None  # ~8 centroides de vértebras proyectados
+    peaks_csv_path:      str | None = None  # peaks de gap intervertebral proyectados
+    match_csv_path:      str | None = None  # match final centroides ↔ peaks con spatial_order
 
 
 class PipelineClinicalResultDTO(BaseModel):
