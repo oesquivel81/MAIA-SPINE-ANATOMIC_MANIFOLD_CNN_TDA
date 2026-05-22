@@ -40,12 +40,20 @@ async def startup_event() -> None:
 		logger.error(f"Error durante bootstrap: {str(e)}", exc_info=True)
 		raise
 
+_default_origins = [
+    "http://localhost:5173",  # Vite dev server
+    "http://localhost:3000",  # Alternative port
+]
+_extra_origins = [
+    o.strip() for o in settings.cors_allowed_origins.split(",") if o.strip()
+]
+_cors_origins = list(dict.fromkeys(_default_origins + _extra_origins))  # dedup, orden preservado
+
+logger.info(f"CORS allow_origins: {_cors_origins}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",  # Vite dev server
-        "http://localhost:3000",  # Alternative port
-    ],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
