@@ -1520,7 +1520,6 @@ function SpineHeatmap3D({
   return (
     <SectionCard title="Vista 3D - Análisis de calor" icon={<Sparkles className="h-4 w-4 text-sky-400" />}>
       <div className="flex flex-wrap items-center gap-2">
-        <ActionChip icon={<RefreshCcw className="h-3.5 w-3.5" />} label="Rotar" onClick={() => onRotateChange(rotation + 12)} />
         <ActionChip icon={<ZoomIn className="h-3.5 w-3.5" />} label="Zoom +" onClick={() => onZoomChange(Number((zoom + 0.08).toFixed(2)))} />
         <ActionChip icon={<ZoomOut className="h-3.5 w-3.5" />} label="Zoom -" onClick={() => onZoomChange(Number(Math.max(0.7, zoom - 0.08).toFixed(2)))} />
         <ActionChip icon={<RotateCcw className="h-3.5 w-3.5" />} label="Restablecer" onClick={onReset} />
@@ -1529,43 +1528,91 @@ function SpineHeatmap3D({
       <div className="mt-4 rounded-2xl border border-[#1e324a] bg-[#091320] p-4">
         <div
           className="relative h-[clamp(300px,42vh,460px)] overflow-hidden rounded-2xl border border-[#16314d] bg-[radial-gradient(circle_at_top,#143150,#08111c_60%)]"
-          style={{ perspective: '1200px' }}
+          style={{ perspective: '1100px' }}
         >
           <div className="pointer-events-none absolute inset-x-6 bottom-5 top-10 rounded-2xl border border-slate-500/10 bg-[linear-gradient(180deg,rgba(148,163,184,0.06),rgba(2,6,23,0.25))] [transform:rotateX(68deg)_translateZ(-40px)]" />
           <div
             className="absolute inset-0 transition-transform duration-300"
-            style={{ transform: `rotateY(${rotation}deg) rotateX(12deg) scale(${zoom})`, transformStyle: 'preserve-3d' }}
+            style={{ transform: `rotateX(22deg) rotateY(18deg) scale(${zoom})`, transformStyle: 'preserve-3d', transformOrigin: 'center center' }}
           >
             {candidates.map((candidate) => {
+              const s = 34;
+              const half = 17;
               const point = realCurve
                 ? curvePointFromRealData(candidate.curve_idx, realCurve)
                 : curvePointForCandidate(candidate, bounds);
               const t = curveTFromIdx(candidate.curve_idx, bounds);
               const metricValue = candidate[metricMode];
-              const intensityColor = heatColor(metricValue, metricMode);
+              const color = heatColor(metricValue, metricMode);
               const active = candidate.peak_idx === selectedPeakIdx;
-              const depth = Math.round((candidate.peak_height + candidate.gap_strength_mean) * 38);
+              const depth = Math.round((candidate.peak_height + candidate.gap_strength_mean) * 42);
               return (
-                <button
+                <div
                   key={candidate.peak_idx}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => onSelectCandidate(candidate)}
-                  className="absolute rounded-md border text-left transition-all"
+                  className="absolute cursor-pointer focus:outline-none"
                   style={{
-                    left: `${Math.max(8, Math.min(82, 18 + ((point.x - 80) / 160) * 64))}%`,
-                    top: `${Math.max(8, Math.min(88, 8 + t * 80))}%`,
-                    width: `${58 + candidate.peak_height * 16}px`,
-                    height: `${18 + candidate.gap_strength_mean * 26}px`,
-                    background: intensityColor,
-                    borderColor: active ? '#f8fafc' : 'rgba(248,250,252,0.12)',
-                    boxShadow: active ? '0 0 0 2px rgba(33,150,243,0.4), 0 10px 26px rgba(0,0,0,0.28)' : '0 10px 24px rgba(0,0,0,0.2)',
-                    transform: `translate3d(${(point.x - 160) * 0.12}px, 0, ${depth}px)`,
+                    left: `${Math.max(6, Math.min(80, 18 + ((point.x - 80) / 160) * 64))}%`,
+                    top: `${Math.max(4, Math.min(84, 8 + t * 78))}%`,
+                    width: s,
+                    height: s,
+                    transformStyle: 'preserve-3d',
+                    transform: `translate(-50%, -50%) translateZ(${depth}px)`,
                   }}
                 >
-                  <span className="absolute -right-2 -top-2 rounded-full border border-[#1e324a] bg-[#07111f] px-1.5 py-0.5 text-[10px] text-slate-200">
+                  {/* Front face */}
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      background: color,
+                      transform: `translateZ(${half}px)`,
+                      border: active ? '2px solid #f8fafc' : '1px solid rgba(255,255,255,0.18)',
+                      boxShadow: active
+                        ? '0 0 16px rgba(33,150,243,0.85), 0 4px 16px rgba(0,0,0,0.4)'
+                        : '0 4px 14px rgba(0,0,0,0.35)',
+                    }}
+                  />
+                  {/* Top face */}
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      background: color,
+                      filter: 'brightness(1.55)',
+                      transform: `rotateX(-90deg) translateZ(${half}px)`,
+                      border: '1px solid rgba(255,255,255,0.12)',
+                    }}
+                  />
+                  {/* Right face */}
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      background: color,
+                      filter: 'brightness(0.48)',
+                      transform: `rotateY(90deg) translateZ(${half}px)`,
+                      border: '1px solid rgba(255,255,255,0.06)',
+                    }}
+                  />
+                  {/* Cluster label */}
+                  <span
+                    className="pointer-events-none absolute"
+                    style={{
+                      top: -11,
+                      left: '50%',
+                      transform: `translateX(-50%) translateZ(${half + 6}px)`,
+                      background: '#07111f',
+                      border: '1px solid #1e324a',
+                      borderRadius: '999px',
+                      padding: '1px 5px',
+                      fontSize: '9px',
+                      color: '#cbd5e1',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
                     {candidate.cluster_id}
                   </span>
-                </button>
+                </div>
               );
             })}
           </div>
